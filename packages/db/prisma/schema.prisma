@@ -45,6 +45,8 @@ model Job {
   bot         Bot      @relation(fields: [botId], references: [id])
   status      String   // queued | running | succeeded | failed | cancelled
   priority    Int      @default(0)
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
   payload     Json
   result      Json?
   error       String?

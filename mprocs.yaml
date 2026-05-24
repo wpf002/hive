@@ -8,6 +8,15 @@ procs:
   dispatcher:
     shell: pnpm --filter @hive/dispatcher dev
     autostart: true
+  scheduler:
+    shell: pnpm --filter @hive/scheduler dev
+    autostart: true
   scraper:
     shell: workers/scraper/.venv/bin/python -m hive_scraper.main
+    autostart: true
+  monitor:
+    shell: workers/monitor/.venv/bin/python -m hive_monitor.main
+    autostart: true
+  ai_agent:
+    shell: pnpm --filter @hive/worker-ai-agent dev
     autostart: true
