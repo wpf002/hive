@@ -1,0 +1,13 @@
+[project]
+name = "hive-scraper"
+version = "0.1.0"
+description = "API/HTML scrapers (httpx, BeautifulSoup, Scrapy)"
+requires-python = ">=3.11"
+dependencies = [
+    "hive-base",
+    "beautifulsoup4>=4.12.0", "scrapy>=2.11.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

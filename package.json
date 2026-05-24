@@ -1,0 +1,35 @@
+{
+  "name": "hive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Distributed bot orchestration platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @hive/db migrate",
+    "db:generate": "pnpm --filter @hive/db generate",
+    "db:studio": "pnpm --filter @hive/db studio",
+    "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker/docker-compose.yml logs -f",
+    "workers:install": "bash scripts/install-workers.sh",
+    "workers:dev": "bash scripts/dev-workers.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "prettier": "^3.3.0"
+  },
+  "packageManager": "pnpm@9.5.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

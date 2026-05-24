@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: hive-monitor
+Version: 0.1.0
+Summary: Uptime / health checks / alerting
+Requires-Python: >=3.11
+Requires-Dist: hive-base
+Requires-Dist: apscheduler>=3.10.0

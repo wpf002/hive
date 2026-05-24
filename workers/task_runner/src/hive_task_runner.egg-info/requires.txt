@@ -1,0 +1,2 @@
+hive-base
+arq>=0.26.0

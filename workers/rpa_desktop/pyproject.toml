@@ -1,0 +1,13 @@
+[project]
+name = "hive-rpa-desktop"
+version = "0.1.0"
+description = "Desktop automation (pyautogui, pywinauto)"
+requires-python = ">=3.11"
+dependencies = [
+    "hive-base",
+    "pyautogui>=0.9.54",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.python-version
+
+# Build outputs
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Prisma
+prisma/migrations/dev.db*
+
+# Docker volumes
+infra/docker/data/
+
+# Worker artifacts
+workers/**/screenshots/
+workers/**/downloads/

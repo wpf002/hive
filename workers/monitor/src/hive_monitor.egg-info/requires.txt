@@ -1,0 +1,2 @@
+hive-base
+apscheduler>=3.10.0
