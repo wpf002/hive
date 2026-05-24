@@ -70,8 +70,18 @@ make dev               # API + UI + dispatcher
 make workers-dev       # all worker pools (separate terminal)
 ```
 
-UI: http://localhost:3000
+UI: http://localhost:3001
 API: http://localhost:4000
+
+### Git hooks
+
+A pre-push hook runs `pnpm verify` (typecheck + lint) before allowing a push. Install once after cloning:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+Bypass with `git push --no-verify` if you need to push WIP. The hook lives in `scripts/git-hooks/` so it's tracked in git; `.git/hooks/` is not.
 
 ## Capacity guidance (local, single Mac)
 

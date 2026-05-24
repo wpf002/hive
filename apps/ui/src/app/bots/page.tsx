@@ -82,7 +82,7 @@ export default function BotsPage() {
         ))}
         {bots.data && bots.data.length === 0 && (
           <div className="col-span-full rounded-lg border border-dashed border-hive-border p-8 text-center font-mono text-sm text-hive-subtle">
-            No bots yet. Click "+ New Bot" to create one from a template.
+            No bots yet. Click &quot;+ New Bot&quot; to create one from a template.
           </div>
         )}
       </div>

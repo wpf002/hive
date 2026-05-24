@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Hive pre-push hook — runs `pnpm verify` before allowing a push.
+# Install: scripts/install-git-hooks.sh
+set -e
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+cd "$ROOT_DIR"
+
+echo "→ pre-push: pnpm verify"
+if ! pnpm verify; then
+  echo "✗ pre-push: pnpm verify failed. Fix the errors above or push with --no-verify to bypass."
+  exit 1
+fi
+echo "✓ pre-push: ok"

@@ -12,6 +12,7 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "verify": "pnpm -r typecheck && pnpm -r lint",
     "db:migrate": "pnpm --filter @hive/db migrate",
     "db:generate": "pnpm --filter @hive/db generate",
     "db:studio": "pnpm --filter @hive/db studio",
