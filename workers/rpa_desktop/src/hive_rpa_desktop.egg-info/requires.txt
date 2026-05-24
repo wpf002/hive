@@ -1,2 +1,0 @@
-hive-base
-pyautogui>=0.9.54

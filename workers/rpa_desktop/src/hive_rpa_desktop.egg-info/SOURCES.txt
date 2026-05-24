@@ -1,7 +1,0 @@
-pyproject.toml
-src/main.py
-src/hive_rpa_desktop.egg-info/PKG-INFO
-src/hive_rpa_desktop.egg-info/SOURCES.txt
-src/hive_rpa_desktop.egg-info/dependency_links.txt
-src/hive_rpa_desktop.egg-info/requires.txt
-src/hive_rpa_desktop.egg-info/top_level.txt

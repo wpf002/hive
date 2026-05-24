@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: hive-rpa-desktop
-Version: 0.1.0
-Summary: Desktop automation (pyautogui, pywinauto)
-Requires-Python: >=3.11
-Requires-Dist: hive-base
-Requires-Dist: pyautogui>=0.9.54

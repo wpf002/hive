@@ -1,2 +1,0 @@
-hive-base
-docker>=7.1.0

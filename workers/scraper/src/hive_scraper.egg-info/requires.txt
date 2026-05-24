@@ -1,3 +1,0 @@
-hive-base
-beautifulsoup4>=4.12.0
-scrapy>=2.11.0

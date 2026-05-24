@@ -1,7 +1,0 @@
-pyproject.toml
-src/main.py
-src/hive_monitor.egg-info/PKG-INFO
-src/hive_monitor.egg-info/SOURCES.txt
-src/hive_monitor.egg-info/dependency_links.txt
-src/hive_monitor.egg-info/requires.txt
-src/hive_monitor.egg-info/top_level.txt

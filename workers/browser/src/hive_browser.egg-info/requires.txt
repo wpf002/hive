@@ -1,2 +1,0 @@
-hive-base
-playwright>=1.45.0
