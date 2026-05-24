@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from hive_base import HiveWorker
 from .espn import fetch_scoreboard
+from .sportsbook import scrape_sportsbook_lines
 
 
 class ScraperWorker(HiveWorker):
@@ -11,6 +12,7 @@ class ScraperWorker(HiveWorker):
 
     async def setup(self) -> None:
         self.register("ESPN Scoreboard Scraper", fetch_scoreboard)
+        self.register("Sportsbook Line Scraper", scrape_sportsbook_lines)
 
 
 def main() -> None:

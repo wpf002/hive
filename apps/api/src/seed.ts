@@ -32,6 +32,30 @@ const TEMPLATES: SeedTemplate[] = [
     defaultConfig: { league: 'nfl', dateOffset: 0 },
   },
   {
+    name: 'Sportsbook Line Scraper',
+    description: 'Pull current odds for one book / league via the-odds-api.com and reshape to a uniform schema. Requires ODDS_API_KEY.',
+    poolType: 'scraper',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['book', 'league'],
+      properties: {
+        book: { type: 'string', enum: ['draftkings', 'fanduel'] },
+        league: { type: 'string', enum: ['nfl', 'nba', 'mlb', 'nhl'] },
+        markets: {
+          type: 'array',
+          items: { type: 'string', enum: ['moneyline', 'spread', 'total'] },
+          default: ['moneyline', 'spread', 'total'],
+        },
+      },
+    },
+    defaultConfig: {
+      book: 'draftkings',
+      league: 'nfl',
+      markets: ['moneyline', 'spread', 'total'],
+    },
+  },
+  {
     name: 'AI Single Call',
     description: 'One-shot call to a single AI provider (Claude / GPT / Perplexity). Returns response + token usage + cost.',
     poolType: 'ai_agent',
