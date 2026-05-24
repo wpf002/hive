@@ -2,22 +2,24 @@
   "name": "@hive/api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "start": "node --env-file=../../.env dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx --env-file=../../.env src/seed.ts"
   },
   "dependencies": {
     "@hive/db": "workspace:*",
     "@hive/shared": "workspace:*",
-    "fastify": "^4.28.0",
     "@fastify/cors": "^9.0.0",
+    "fastify": "^4.28.0",
     "fastify-sse-v2": "^4.1.0",
-    "bullmq": "^5.12.0",
     "ioredis": "^5.4.0",
-    "zod": "^3.23.0",
-    "pino": "^9.3.0"
+    "pino": "^9.3.0",
+    "pino-pretty": "^11.2.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
