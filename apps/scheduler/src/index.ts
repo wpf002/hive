@@ -79,7 +79,8 @@ async function tick(): Promise<void> {
       const res = await triggerRun(s.botId);
       const lastRunAt = new Date();
       const nextRunAt = computeNext(s.cron, lastRunAt);
-      await prisma.schedule.update({
+      // updateMany so a concurrently-deleted schedule is a no-op, not a P2025.
+      await prisma.schedule.updateMany({
         where: { id: s.id },
         data: { lastRunAt, nextRunAt },
       });

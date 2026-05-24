@@ -129,8 +129,9 @@ export async function jobRoutes(app: FastifyInstance) {
       if (job.status !== 'failed') {
         return reply.code(409).send({ error: { code: 'not_failed', message: `job is ${job.status}, only failed jobs can be requeued` } });
       }
-      const payload = job.payload as Record<string, unknown>;
-      const config = ((payload?.config as Record<string, unknown> | undefined) ?? (job.bot.config as Record<string, unknown>));
+      // Requeue uses the bot's CURRENT config, not the job's original payload,
+      // so a fix to the bot config takes effect on requeue.
+      const config = job.bot.config as Record<string, unknown>;
       const updated = await prisma.job.update({
         where: { id: job.id },
         data: {
@@ -140,6 +141,7 @@ export async function jobRoutes(app: FastifyInstance) {
           result: Prisma.DbNull,
           startedAt: null,
           finishedAt: null,
+          payload: { config, templateName: job.bot.template.name, pool: job.bot.template.poolType } as Prisma.InputJsonValue,
         },
       });
       await redis.xadd(
