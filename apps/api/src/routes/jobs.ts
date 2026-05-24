@@ -97,4 +97,62 @@ export async function jobRoutes(app: FastifyInstance) {
       return updated;
     },
   );
+
+  app.get('/api/jobs/dlq', { preHandler: requireAuth('api') }, async () => {
+    const entries = (await redis.xrange('hive:dlq', '-', '+', 'COUNT', 200)) as Array<[string, string[]]>;
+    const items = entries.map(([id, fields]) => {
+      const map: Record<string, string> = {};
+      for (let i = 0; i < fields.length; i += 2) map[fields[i]] = fields[i + 1];
+      return {
+        entryId: id,
+        jobId: map.jobId,
+        botId: map.botId,
+        pool: map.pool,
+        templateName: map.templateName,
+        error: map.error,
+        failedAt: map.failedAt,
+        workerId: map.workerId,
+      };
+    });
+    return items.reverse();
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/api/jobs/:id/requeue',
+    { preHandler: requireAuth('api') },
+    async (req, reply) => {
+      const job = await prisma.job.findUnique({
+        where: { id: req.params.id },
+        include: { bot: { include: { template: true } } },
+      });
+      if (!job) return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
+      if (job.status !== 'failed') {
+        return reply.code(409).send({ error: { code: 'not_failed', message: `job is ${job.status}, only failed jobs can be requeued` } });
+      }
+      const payload = job.payload as Record<string, unknown>;
+      const config = ((payload?.config as Record<string, unknown> | undefined) ?? (job.bot.config as Record<string, unknown>));
+      const updated = await prisma.job.update({
+        where: { id: job.id },
+        data: {
+          status: 'queued',
+          attempts: 0,
+          error: null,
+          result: Prisma.DbNull,
+          startedAt: null,
+          finishedAt: null,
+        },
+      });
+      await redis.xadd(
+        STREAMS.dispatch,
+        '*',
+        'jobId', job.id,
+        'botId', job.botId,
+        'pool', job.bot.template.poolType,
+        'templateName', job.bot.template.name,
+        'config', JSON.stringify(config),
+        'priority', String(job.priority),
+      );
+      return updated;
+    },
+  );
 }

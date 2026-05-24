@@ -1,5 +1,5 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { PoolBadge } from '@/components/PoolBadge';
 import { fmtRelative } from '@/lib/format';
@@ -7,11 +7,22 @@ import { cn } from '@/lib/cn';
 import type { Worker, Pool } from '@/lib/types';
 
 export default function WorkersPage() {
+  const qc = useQueryClient();
   const workers = useQuery<Worker[]>({
     queryKey: ['workers'],
     queryFn: () => api.get<Worker[]>('/api/workers'),
     refetchInterval: 5_000,
   });
+
+  async function drain(w: Worker) {
+    if (!confirm(`Drain ${w.id}? It will finish in-flight jobs (${w.activeJobs}) and stop accepting new ones.`)) return;
+    try {
+      await api.post(`/api/workers/${w.id}/drain`);
+      await qc.invalidateQueries({ queryKey: ['workers'] });
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   const grouped = (workers.data ?? []).reduce<Record<string, Worker[]>>((acc, w) => {
     (acc[w.poolType] ??= []).push(w);
@@ -44,6 +55,7 @@ export default function WorkersPage() {
                 <th className="px-4 py-2">Capacity</th>
                 <th className="px-4 py-2">Active</th>
                 <th className="px-4 py-2">Last seen</th>
+                <th className="px-4 py-2"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
@@ -66,6 +78,17 @@ export default function WorkersPage() {
                   <td className="px-4 py-2 font-mono text-xs">{w.capacity}</td>
                   <td className="px-4 py-2 font-mono text-xs">{w.activeJobs}</td>
                   <td className="px-4 py-2 font-mono text-xs text-hive-subtle">{fmtRelative(w.lastSeenAt)}</td>
+                  <td className="px-4 py-2 text-right">
+                    {w.status === 'online' && (
+                      <button
+                        type="button"
+                        onClick={() => drain(w)}
+                        className="rounded border border-amber-500/30 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-500/10"
+                      >
+                        drain
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

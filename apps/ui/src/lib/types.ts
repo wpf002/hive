@@ -33,6 +33,8 @@ export interface Job {
   bot?: Bot;
   status: JobStatus;
   priority: number;
+  attempts: number;
+  maxAttempts: number;
   payload: Record<string, unknown>;
   result: unknown | null;
   error: string | null;
@@ -40,6 +42,17 @@ export interface Job {
   finishedAt: string | null;
   createdAt: string;
   logs?: JobLog[];
+}
+
+export interface DlqEntry {
+  entryId: string;
+  jobId: string;
+  botId: string;
+  pool: string;
+  templateName: string;
+  error: string;
+  failedAt: string;
+  workerId: string;
 }
 
 export interface JobLog {

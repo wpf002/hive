@@ -20,9 +20,17 @@ log = structlog.get_logger()
 Handler = Callable[[dict[str, Any], JobLogger], Awaitable[Any]]
 
 
+DLQ_STREAM = "hive:dlq"
+
+
+def drain_key(worker_id: str) -> str:
+    return f"hive:worker:{worker_id}:drain"
+
+
 class HiveWorker(ABC):
     pool_type: str = ""
     capacity: int = 4
+    max_attempts: int = 3
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or load_settings()
@@ -33,6 +41,8 @@ class HiveWorker(ABC):
         self._redis_main: Optional[redis_async.Redis] = None
         self._redis_block: Optional[redis_async.Redis] = None
         self._heartbeat: Optional[Heartbeat] = None
+        self._status: str = "online"  # online | draining
+        self._should_exit = False
 
     def register(self, template_name: str, handler: Handler) -> None:
         self._handlers[template_name] = handler
@@ -63,6 +73,7 @@ class HiveWorker(ABC):
 
     async def _process(self, data: dict[str, str]) -> None:
         job_id = data.get("jobId", "")
+        bot_id = data.get("botId", "")
         template_name = data.get("templateName", "")
         config_raw = data.get("config", "{}")
         try:
@@ -87,30 +98,49 @@ class HiveWorker(ABC):
         await dbmod.mark_running(self.settings.DATABASE_URL, job_id)
         await joblog.info("job.start", template=template_name, worker=self.worker_id)
 
-        terminal_status = "succeeded"
-        attempt_err: Optional[str] = None
+        last_err: Optional[str] = None
         result: Any = None
+        succeeded = False
 
-        for attempt in (1, 2):  # one initial try + one retry
+        for attempt in range(1, self.max_attempts + 1):
+            await dbmod.increment_attempts(self.settings.DATABASE_URL, job_id)
+            if attempt > 1:
+                await joblog.warn("job.retrying", attempt=attempt)
             try:
                 result = await handler(config, joblog)
-                attempt_err = None
+                succeeded = True
+                last_err = None
                 break
             except Exception as e:
-                attempt_err = f"{type(e).__name__}: {e}"
+                last_err = f"{type(e).__name__}: {e}"
                 tb = traceback.format_exc(limit=8)
-                await joblog.error("job.error", attempt=attempt, error=attempt_err, traceback=tb)
-                if attempt == 1:
-                    await joblog.warn("job.retrying", attempt=attempt + 1)
-                else:
-                    break
+                await joblog.error("job.error", attempt=attempt, error=last_err, traceback=tb)
 
-        if attempt_err is None:
+        if succeeded:
             await dbmod.mark_succeeded(self.settings.DATABASE_URL, job_id, result)
             await joblog.info("job.succeeded")
             terminal_status = "succeeded"
         else:
-            await dbmod.mark_failed(self.settings.DATABASE_URL, job_id, attempt_err)
+            await dbmod.mark_failed(self.settings.DATABASE_URL, job_id, last_err or "unknown error")
+            await joblog.error("job.dead_letter", maxAttempts=self.max_attempts)
+            try:
+                from datetime import datetime, timezone
+                assert self._redis_main is not None
+                await self._redis_main.xadd(
+                    DLQ_STREAM,
+                    {
+                        "jobId": job_id,
+                        "botId": bot_id,
+                        "pool": self.pool_type,
+                        "templateName": template_name,
+                        "config": config_raw,
+                        "error": last_err or "unknown error",
+                        "failedAt": datetime.now(timezone.utc).isoformat(),
+                        "workerId": self.worker_id,
+                    },
+                )
+            except Exception as e:
+                log.error("dlq_xadd_failed", err=str(e), job_id=job_id)
             terminal_status = "failed"
 
         await joblog.flush()
@@ -129,11 +159,28 @@ class HiveWorker(ABC):
                 except Exception as e:
                     log.error("worker.xack_failed", err=str(e), entry_id=entry_id)
 
+    async def _check_drain(self) -> bool:
+        try:
+            assert self._redis_main is not None
+            val = await self._redis_main.get(drain_key(self.worker_id))
+            return val == "1"
+        except Exception:
+            return False
+
     async def _consume_loop(self) -> None:
         assert self._redis_block is not None
         consumer_name = self.worker_id
         log.info("worker.consume_loop.start", stream=self.stream, consumer=consumer_name)
-        while True:
+        while not self._should_exit:
+            if await self._check_drain():
+                if self._status != "draining":
+                    self._status = "draining"
+                    log.info("worker.draining", worker_id=self.worker_id)
+                if self._active_jobs == 0:
+                    log.info("worker.drained_exit", worker_id=self.worker_id)
+                    return
+                await asyncio.sleep(1.0)
+                continue
             res = await self._redis_block.xreadgroup(
                 self.group,
                 consumer_name,
@@ -172,6 +219,7 @@ class HiveWorker(ABC):
             api_base_url=self.settings.API_BASE_URL,
             auth_token=self.settings.WORKER_AUTH_TOKEN,
             get_active_jobs=lambda: self._active_jobs,
+            get_status=lambda: self._status,
         )
         self._heartbeat.start()
 

@@ -41,6 +41,13 @@ async def mark_failed(dsn: str, job_id: str, error: str) -> None:
         await conn.commit()
 
 
+async def increment_attempts(dsn: str, job_id: str) -> None:
+    async with await psycopg.AsyncConnection.connect(dsn) as conn:
+        async with conn.cursor() as cur:
+            await cur.execute('UPDATE "Job" SET attempts = attempts + 1 WHERE id=%s', (job_id,))
+        await conn.commit()
+
+
 async def insert_logs(dsn: str, rows: list[dict[str, Any]]) -> None:
     """Batch-insert JobLog rows.
 

@@ -50,19 +50,37 @@ export default function JobDetailPage() {
             Bot: {j.bot && <Link className="hover:text-honey-500" href={`/bots/${j.botId}`}>{j.bot.name}</Link>}
           </div>
         </div>
-        {j.status === 'running' || j.status === 'queued' ? (
-          <button
-            onClick={cancel}
-            className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-          >Cancel</button>
-        ) : null}
+        <div className="flex gap-2">
+          {(j.status === 'running' || j.status === 'queued') && (
+            <button
+              type="button"
+              onClick={cancel}
+              className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+            >Cancel</button>
+          )}
+          {j.status === 'failed' && (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await api.post(`/api/jobs/${id}/requeue`);
+                  await qc.invalidateQueries({ queryKey: ['job', id] });
+                } catch (e) {
+                  alert((e as Error).message);
+                }
+              }}
+              className="rounded border border-honey-500/30 px-3 py-1.5 text-sm text-honey-500 hover:bg-honey-500/10"
+            >Requeue</button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Info label="created" value={fmtDateTime(j.createdAt)} />
         <Info label="started" value={j.startedAt ? fmtDateTime(j.startedAt) : '—'} />
         <Info label="finished" value={j.finishedAt ? fmtDateTime(j.finishedAt) : '—'} />
         <Info label="duration" value={fmtDuration(j.startedAt, j.finishedAt)} />
+        <Info label="attempts" value={`${j.attempts}/${j.maxAttempts}`} />
       </div>
 
       <section className="space-y-2">

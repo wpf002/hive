@@ -20,6 +20,7 @@ class Heartbeat:
         api_base_url: str,
         auth_token: str,
         get_active_jobs: callable,  # type: ignore[type-arg]
+        get_status: Optional[callable] = None,  # type: ignore[type-arg]
         hostname: Optional[str] = None,
         interval_s: float = DEFAULT_INTERVAL_S,
     ) -> None:
@@ -29,12 +30,14 @@ class Heartbeat:
         self.api_base_url = api_base_url.rstrip("/")
         self.auth_token = auth_token
         self.get_active_jobs = get_active_jobs
+        self.get_status = get_status
         self.hostname = hostname or socket.gethostname()
         self.interval_s = interval_s
         self._task: Optional[asyncio.Task] = None
 
     async def _send_once(self, client: httpx.AsyncClient) -> None:
         try:
+            status = self.get_status() if self.get_status else "online"
             r = await client.post(
                 f"{self.api_base_url}/api/workers/heartbeat",
                 json={
@@ -43,6 +46,7 @@ class Heartbeat:
                     "hostname": self.hostname,
                     "capacity": self.capacity,
                     "activeJobs": int(self.get_active_jobs()),
+                    "metadata": {"status": status},
                 },
                 headers={"Authorization": f"Bearer {self.auth_token}"},
                 timeout=5.0,
