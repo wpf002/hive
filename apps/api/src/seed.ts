@@ -110,6 +110,46 @@ const TEMPLATES: SeedTemplate[] = [
       temperature: 0.3,
     },
   },
+  {
+    name: 'HTTP Endpoint Monitor',
+    description: 'Ping an HTTP endpoint and assert status / optional body match. "down" returns ok=false; only infrastructure errors fail the job.',
+    poolType: 'monitor',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['url'],
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        method: { type: 'string', enum: ['GET', 'HEAD', 'POST'], default: 'GET' },
+        expectedStatus: { type: 'integer', minimum: 100, maximum: 599, default: 200 },
+        timeoutMs: { type: 'integer', minimum: 100, default: 10000 },
+        headers: { type: 'object', additionalProperties: { type: 'string' } },
+        body: { type: 'string' },
+        checkBodyContains: { type: 'string' },
+      },
+    },
+    defaultConfig: {
+      url: 'https://example.com',
+      method: 'GET',
+      expectedStatus: 200,
+      timeoutMs: 10000,
+    },
+  },
+  {
+    name: 'Cron Heartbeat',
+    description: 'Minimal monitor template — echoes a label, returns timestamp + hostname. Useful as a "Hive is alive" signal.',
+    poolType: 'monitor',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['label'],
+      properties: {
+        label: { type: 'string' },
+        payload: { type: 'object' },
+      },
+    },
+    defaultConfig: { label: 'hive', payload: {} },
+  },
 ];
 
 async function upsertTemplate(t: SeedTemplate): Promise<void> {
