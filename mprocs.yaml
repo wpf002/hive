@@ -1,0 +1,13 @@
+procs:
+  api:
+    shell: pnpm --filter @hive/api dev
+    autostart: true
+  ui:
+    shell: pnpm --filter @hive/ui dev
+    autostart: true
+  dispatcher:
+    shell: pnpm --filter @hive/dispatcher dev
+    autostart: true
+  scraper:
+    shell: workers/scraper/.venv/bin/python -m hive_scraper.main
+    autostart: true
