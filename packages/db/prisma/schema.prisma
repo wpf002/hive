@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // Bot template — a reusable recipe (e.g., "ESPN Scoreboard Scraper")

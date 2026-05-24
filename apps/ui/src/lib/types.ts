@@ -68,3 +68,25 @@ export interface HealthCheck {
   uptimeMs: number;
   checks: Record<string, { ok: boolean; error?: string }>;
 }
+
+export interface Schedule {
+  id: string;
+  botId: string;
+  bot?: Bot;
+  cron: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+}
+
+export interface AiUsage {
+  id: string;
+  jobId: string | null;
+  provider: 'claude' | 'gpt' | 'perplexity';
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  createdAt: string;
+}
