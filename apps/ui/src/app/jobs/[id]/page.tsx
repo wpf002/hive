@@ -31,7 +31,7 @@ export default function JobDetailPage() {
   }
 
   if (!job.data) {
-    return <div className="p-6 font-mono text-sm text-hive-subtle">{job.isLoading ? 'loading…' : 'job not found'}</div>;
+    return <div className="p-6 font-mono text-sm text-hive-subtle">{job.isLoading ? 'Loading…' : 'Job not found'}</div>;
   }
 
   const j = job.data;
@@ -40,14 +40,14 @@ export default function JobDetailPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Link href="/jobs" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← jobs</Link>
+          <Link href="/jobs" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← Jobs</Link>
           <div className="flex items-center gap-2">
             <StatusBadge status={j.status} />
             {j.bot?.template && <PoolBadge pool={j.bot.template.poolType} />}
             <span className="font-mono text-xs text-hive-subtle">{j.id}</span>
           </div>
           <div className="font-mono text-xs text-hive-subtle">
-            bot: {j.bot && <Link className="hover:text-honey-500" href={`/bots/${j.botId}`}>{j.bot.name}</Link>}
+            Bot: {j.bot && <Link className="hover:text-honey-500" href={`/bots/${j.botId}`}>{j.bot.name}</Link>}
           </div>
         </div>
         {j.status === 'running' || j.status === 'queued' ? (
@@ -66,7 +66,7 @@ export default function JobDetailPage() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">Live logs</h2>
+        <h2 className="font-semibold">Live Logs</h2>
         <LiveLogStream jobId={j.id} />
       </section>
 

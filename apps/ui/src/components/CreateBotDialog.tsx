@@ -59,7 +59,7 @@ export function CreateBotDialog({ onClose }: { onClose: () => void }) {
         className="w-full max-w-lg space-y-3 rounded-lg border border-hive-border bg-hive-surface p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold">New bot</h2>
+        <h2 className="text-lg font-semibold">New Bot</h2>
         <label className="block">
           <span className="font-mono text-[11px] uppercase text-hive-subtle">Template</span>
           <select

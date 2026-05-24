@@ -65,7 +65,7 @@ export function CommandPalette() {
             <Command.Item onSelect={() => { setOpen(false); router.push('/bots'); }}>Bots</Command.Item>
             <Command.Item onSelect={() => { setOpen(false); router.push('/templates'); }}>Templates</Command.Item>
             <Command.Item onSelect={() => { setOpen(false); router.push('/jobs'); }}>Jobs</Command.Item>
-            <Command.Item onSelect={() => { setOpen(false); router.push('/workers'); }}>View workers</Command.Item>
+            <Command.Item onSelect={() => { setOpen(false); router.push('/workers'); }}>View Workers</Command.Item>
           </Command.Group>
           {bots.data && bots.data.length > 0 && (
             <Command.Group heading="Run bot…" className="text-[10px] uppercase tracking-wide text-hive-subtle">

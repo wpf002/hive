@@ -23,7 +23,7 @@ export default function JobsPage() {
     <div className="space-y-4 p-6">
       <div>
         <h1 className="text-2xl font-bold">Jobs</h1>
-        <p className="font-mono text-xs text-hive-subtle">Every execution, newest first</p>
+        <p className="font-mono text-xs text-hive-subtle">EVERY EXECUTION, NEWEST FIRST</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -69,7 +69,7 @@ export default function JobsPage() {
               </tr>
             ))}
             {jobs.data && jobs.data.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">no jobs</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No jobs</td></tr>
             )}
           </tbody>
         </table>

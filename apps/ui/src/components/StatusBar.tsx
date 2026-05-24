@@ -46,13 +46,13 @@ export function StatusBar() {
 
   return (
     <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-hive-border bg-hive-bg px-3">
-      <Pill label="api"   ok={apiOk} />
-      <Pill label="pg"    ok={!!pgOk} />
-      <Pill label="redis" ok={!!redisOk} />
+      <Pill label="API"   ok={apiOk} />
+      <Pill label="PG"    ok={!!pgOk} />
+      <Pill label="Redis" ok={!!redisOk} />
       <div className="mx-1 h-4 w-px bg-hive-border" />
-      <Pill label="workers" value={`${onlineWorkers}/${totalWorkers}`} />
-      <Pill label="queued"  value={queued.data?.length ?? 0} />
-      <Pill label="running" value={running.data?.length ?? 0} />
+      <Pill label="Workers" value={`${onlineWorkers}/${totalWorkers}`} />
+      <Pill label="Queued"  value={queued.data?.length ?? 0} />
+      <Pill label="Running" value={running.data?.length ?? 0} />
       <div className="flex-1" />
       <span className="font-mono text-[10px] text-hive-subtle">{api.base}</span>
     </footer>

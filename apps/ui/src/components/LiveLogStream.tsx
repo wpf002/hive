@@ -101,7 +101,7 @@ export function LiveLogStream({ jobId }: { jobId: string }) {
   return (
     <div className="rounded border border-hive-border bg-black/60">
       <div className="flex items-center justify-between border-b border-hive-border px-3 py-1.5">
-        <span className="font-mono text-xs text-hive-subtle">live logs · {lines.length} lines</span>
+        <span className="font-mono text-xs text-hive-subtle">Live logs · {lines.length} lines</span>
         {done && (
           <span className={cn(
             'rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase',
@@ -112,9 +112,9 @@ export function LiveLogStream({ jobId }: { jobId: string }) {
         )}
       </div>
       <div ref={scrollRef} className="h-96 overflow-auto p-2 font-mono text-[12px] leading-5">
-        {error && <div className="text-red-400">error: {error}</div>}
+        {error && <div className="text-red-400">Error: {error}</div>}
         {lines.length === 0 && !error && (
-          <div className="text-hive-subtle">waiting for logs…</div>
+          <div className="text-hive-subtle">Waiting for logs…</div>
         )}
         {lines.map((l, i) => (
           <div key={i} className={cn('whitespace-pre-wrap', LEVEL_COLOR[l.level])}>

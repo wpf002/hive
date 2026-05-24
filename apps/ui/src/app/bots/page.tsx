@@ -37,13 +37,13 @@ export default function BotsPage() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">Bots</h1>
-          <p className="font-mono text-xs text-hive-subtle">Instantiated templates · ready to run</p>
+          <p className="font-mono text-xs text-hive-subtle">INSTANTIATED TEMPLATES · READY TO RUN</p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
           className="rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
         >
-          + New bot
+          + New Bot
         </button>
       </div>
 
@@ -60,7 +60,7 @@ export default function BotsPage() {
                 {bot.template && <PoolBadge pool={bot.template.poolType} />}
               </div>
               <div className="font-mono text-xs text-hive-subtle">
-                {bot.template?.name ?? 'template missing'}
+                {bot.template?.name ?? 'Template missing'}
               </div>
               <div className="flex items-center gap-2 text-xs">
                 <button
@@ -82,7 +82,7 @@ export default function BotsPage() {
         ))}
         {bots.data && bots.data.length === 0 && (
           <div className="col-span-full rounded-lg border border-dashed border-hive-border p-8 text-center font-mono text-sm text-hive-subtle">
-            No bots yet. Click "+ New bot" to create one from a template.
+            No bots yet. Click "+ New Bot" to create one from a template.
           </div>
         )}
       </div>

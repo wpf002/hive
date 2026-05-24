@@ -49,19 +49,19 @@ export default function DashboardPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="font-mono text-xs text-hive-subtle">Hive control plane · Phase 1</p>
+        <p className="font-mono text-xs text-hive-subtle">HIVE CONTROL PLANE · PHASE 1</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Running" value={running.data?.length ?? 0} />
         <Stat label="Queued" value={queued.data?.length ?? 0} />
-        <Stat label="Workers online" value={onlineWorkers} hint={`of ${workers.data?.length ?? 0} total`} />
+        <Stat label="Workers online" value={onlineWorkers} hint={`OF ${workers.data?.length ?? 0} TOTAL`} />
         <Stat label="Templates" value={templates.data?.length ?? 0} />
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
         <div className="flex items-center justify-between border-b border-hive-border px-4 py-3">
           <h2 className="font-semibold">Recent jobs</h2>
-          <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">all jobs →</Link>
+          <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">All jobs →</Link>
         </div>
         <table className="w-full text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
@@ -88,7 +88,7 @@ export default function DashboardPage() {
               </tr>
             ))}
             {recent.data && recent.data.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">no jobs yet — run a bot to see them here</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No jobs yet — run a bot to see them here</td></tr>
             )}
           </tbody>
         </table>

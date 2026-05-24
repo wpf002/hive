@@ -51,14 +51,14 @@ export default function BotDetailPage() {
   }
 
   if (!bot.data) {
-    return <div className="p-6 font-mono text-sm text-hive-subtle">{bot.isLoading ? 'loading…' : 'bot not found'}</div>;
+    return <div className="p-6 font-mono text-sm text-hive-subtle">{bot.isLoading ? 'Loading…' : 'Bot not found'}</div>;
   }
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <Link href="/bots" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← bots</Link>
+          <Link href="/bots" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← Bots</Link>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{bot.data.name}</h1>
             {bot.data.template && <PoolBadge pool={bot.data.template.poolType} />}
@@ -102,7 +102,7 @@ export default function BotDetailPage() {
         </div>
 
         <div className="rounded-lg border border-hive-border bg-hive-surface">
-          <div className="border-b border-hive-border px-4 py-3 font-semibold">Run history (last 10)</div>
+          <div className="border-b border-hive-border px-4 py-3 font-semibold">Run History (last 10)</div>
           <table className="w-full text-sm">
             <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
               <tr>
@@ -120,7 +120,7 @@ export default function BotDetailPage() {
                 </tr>
               ))}
               {bot.data.jobs && bot.data.jobs.length === 0 && (
-                <tr><td colSpan={2} className="px-4 py-4 text-center font-mono text-xs text-hive-subtle">no runs yet</td></tr>
+                <tr><td colSpan={2} className="px-4 py-4 text-center font-mono text-xs text-hive-subtle">No runs yet</td></tr>
               )}
             </tbody>
           </table>

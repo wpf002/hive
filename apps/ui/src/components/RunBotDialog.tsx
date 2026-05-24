@@ -41,12 +41,12 @@ export function RunBotDialog({ bot, onClose }: { bot: Bot; onClose: () => void }
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-hive-border px-4 py-3">
-          <div className="font-mono text-xs text-hive-subtle">Run bot</div>
+          <div className="font-mono text-xs text-hive-subtle">Run Bot</div>
           <div className="text-lg font-semibold">{bot.name}</div>
         </div>
         <div className="grid flex-1 grid-cols-2 gap-3 overflow-hidden p-4">
           <div className="flex min-h-0 flex-col">
-            <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">config (editable)</div>
+            <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">Config (editable)</div>
             <div className="flex-1 overflow-hidden rounded border border-hive-border">
               <MonacoEditor
                 language="json"
@@ -58,7 +58,7 @@ export function RunBotDialog({ bot, onClose }: { bot: Bot; onClose: () => void }
             </div>
           </div>
           <div className="flex min-h-0 flex-col">
-            <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">schema (read-only)</div>
+            <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">Schema (read-only)</div>
             <pre className="flex-1 overflow-auto rounded border border-hive-border bg-black/40 p-2 font-mono text-[11px] text-hive-subtle">
               {JSON.stringify(bot.template?.configSchema ?? {}, null, 2)}
             </pre>

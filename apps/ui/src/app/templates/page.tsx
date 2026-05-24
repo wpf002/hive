@@ -14,7 +14,7 @@ export default function TemplatesPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Templates</h1>
-        <p className="font-mono text-xs text-hive-subtle">Read-only library · seeded by API</p>
+        <p className="font-mono text-xs text-hive-subtle">READ-ONLY LIBRARY · SEEDED BY API</p>
       </div>
       <div className="space-y-3">
         {tpls.data?.map((t) => (
@@ -28,7 +28,7 @@ export default function TemplatesPage() {
             </div>
             <details className="mt-3">
               <summary className="cursor-pointer font-mono text-xs text-hive-subtle hover:text-honey-500">
-                config schema
+                Config schema
               </summary>
               <pre className="mt-2 overflow-auto rounded border border-hive-border bg-black/40 p-2 font-mono text-[11px]">
                 {JSON.stringify(t.configSchema, null, 2)}
@@ -36,7 +36,7 @@ export default function TemplatesPage() {
             </details>
             <details className="mt-2">
               <summary className="cursor-pointer font-mono text-xs text-hive-subtle hover:text-honey-500">
-                default config
+                Default config
               </summary>
               <pre className="mt-2 overflow-auto rounded border border-hive-border bg-black/40 p-2 font-mono text-[11px]">
                 {JSON.stringify(t.defaultConfig, null, 2)}

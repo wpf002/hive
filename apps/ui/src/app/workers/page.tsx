@@ -22,7 +22,7 @@ export default function WorkersPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Workers</h1>
-        <p className="font-mono text-xs text-hive-subtle">Heartbeats every 10s · offline after 30s silence</p>
+        <p className="font-mono text-xs text-hive-subtle">HEARTBEATS EVERY 10S · OFFLINE AFTER 30S SILENCE</p>
       </div>
       {Object.keys(grouped).length === 0 && (
         <div className="rounded-lg border border-dashed border-hive-border p-8 text-center font-mono text-sm text-hive-subtle">
