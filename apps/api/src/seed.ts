@@ -150,6 +150,219 @@ const TEMPLATES: SeedTemplate[] = [
     },
     defaultConfig: { label: 'hive', payload: {} },
   },
+  // ============ Discord (Phase 3a) ============
+  // Note: botToken is stored plaintext in config in dev. Phase 4 will encrypt
+  // secrets at rest with libsodium or pgcrypto.
+  {
+    name: 'Discord Channel Poster',
+    description: 'Post a message (optionally with embed + mentions) to a Discord channel. Bot must be in the guild with Send Messages perm. Token is stored plaintext in dev — Phase 4 will encrypt secrets at rest.',
+    poolType: 'discord',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['botToken', 'channelId', 'content'],
+      properties: {
+        botToken: { type: 'string', format: 'password', description: 'Discord bot token (secret)' },
+        channelId: { type: 'string', description: 'Numeric channel ID' },
+        content: { type: 'string', maxLength: 2000, description: 'Message body (markdown allowed)' },
+        embed: {
+          type: 'object',
+          description: 'Optional embed object',
+          properties: {
+            title: { type: 'string' },
+            description: { type: 'string' },
+            color: { type: 'integer', description: 'Hex int (e.g. 0xFFC107)' },
+            fields: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  value: { type: 'string' },
+                  inline: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        mentions: { type: 'array', items: { type: 'string' }, description: 'User IDs to ping' },
+      },
+    },
+    defaultConfig: { botToken: '', channelId: '', content: 'Hello from Hive 🐝' },
+  },
+  {
+    name: 'Discord DM Sender',
+    description: 'Open a DM channel with a Discord user and send a message. User must share a guild with the bot. Token is stored plaintext in dev.',
+    poolType: 'discord',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['botToken', 'userId', 'content'],
+      properties: {
+        botToken: { type: 'string', format: 'password' },
+        userId: { type: 'string', description: 'Numeric Discord user ID' },
+        content: { type: 'string', maxLength: 2000 },
+      },
+    },
+    defaultConfig: { botToken: '', userId: '', content: 'Hello from Hive 🐝' },
+  },
+  {
+    name: 'Discord Slash Command Listener',
+    description: 'Long-running: registers /commandName on a guild and replies to invocations for durationSeconds using a Jinja-style template. Logs each invocation. Tagged discord_long_running.',
+    poolType: 'discord',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['botToken', 'guildId', 'commandName', 'commandDescription', 'responseTemplate'],
+      properties: {
+        botToken: { type: 'string', format: 'password' },
+        guildId: { type: 'string' },
+        commandName: {
+          type: 'string',
+          pattern: '^[a-z0-9_-]{1,32}$',
+          description: 'Lowercase, no spaces, max 32 chars',
+        },
+        commandDescription: { type: 'string', maxLength: 100 },
+        responseTemplate: {
+          type: 'string',
+          description: 'Reply body. Use {{ argName }} for placeholders.',
+        },
+        argSchema: {
+          type: 'array',
+          default: [],
+          items: {
+            type: 'object',
+            required: ['name', 'description', 'type'],
+            properties: {
+              name: { type: 'string', pattern: '^[a-z][a-z0-9_]{0,31}$' },
+              description: { type: 'string' },
+              required: { type: 'boolean', default: false },
+              type: { type: 'string', enum: ['string', 'int', 'bool'] },
+            },
+          },
+        },
+        durationSeconds: { type: 'integer', minimum: 1, maximum: 86400, default: 3600 },
+      },
+    },
+    defaultConfig: {
+      botToken: '',
+      guildId: '',
+      commandName: 'hivetest',
+      commandDescription: 'Hive test command',
+      responseTemplate: 'pong — Hive heard you, {{ name }}',
+      argSchema: [{ name: 'name', description: 'Your name', required: true, type: 'string' }],
+      durationSeconds: 300,
+    },
+  },
+  // ============ Telegram (Phase 3a) ============
+  {
+    name: 'Telegram Channel Poster',
+    description: 'Send a message to a Telegram channel or group. parseMode default MarkdownV2 — remember to escape MarkdownV2 reserved chars. Token is stored plaintext in dev.',
+    poolType: 'telegram',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['botToken', 'chatId', 'content'],
+      properties: {
+        botToken: { type: 'string', format: 'password' },
+        chatId: { type: 'string', description: 'Channel @handle or numeric chat ID' },
+        content: { type: 'string', maxLength: 4096 },
+        parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
+        disableNotification: { type: 'boolean', default: false },
+        disablePreview: { type: 'boolean', default: false },
+      },
+    },
+    defaultConfig: { botToken: '', chatId: '', content: 'Hello from Hive', parseMode: 'plain' },
+  },
+  {
+    name: 'Telegram DM Alerter',
+    description: 'Personal page-me style alerts to a Telegram user with severity prefix (info/warn/critical). User must have started a chat with the bot first.',
+    poolType: 'telegram',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['botToken', 'userId', 'content'],
+      properties: {
+        botToken: { type: 'string', format: 'password' },
+        userId: { type: 'string', description: 'Numeric Telegram user ID' },
+        content: { type: 'string', maxLength: 4096 },
+        parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
+        severity: { type: 'string', enum: ['info', 'warn', 'critical'], default: 'info' },
+        prefix: { type: 'boolean', default: true, description: 'Prepend emoji + severity tag' },
+      },
+    },
+    defaultConfig: {
+      botToken: '',
+      userId: '',
+      content: 'Hive alert — test page',
+      parseMode: 'plain',
+      severity: 'info',
+      prefix: true,
+    },
+  },
+  // ============ Trading (Phase 3b) ============
+  {
+    name: 'Trading Market Order',
+    description: 'Place a market buy/sell order. Default paper mode simulates against PaperWallet. Live mode requires TRADING_LIVE_ENABLED=true plus API keys; always records a TradeAudit row.',
+    poolType: 'trading',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['exchange', 'symbol', 'side', 'amount'],
+      properties: {
+        exchange: { type: 'string', enum: ['binance', 'coinbase', 'kraken'] },
+        symbol: { type: 'string', description: 'e.g. BTC/USDT' },
+        side: { type: 'string', enum: ['buy', 'sell'] },
+        amount: { type: 'number', exclusiveMinimum: 0 },
+        mode: { type: 'string', enum: ['paper', 'live'], default: 'paper' },
+        apiKey: { type: 'string', format: 'password' },
+        apiSecret: { type: 'string', format: 'password' },
+        maxSlippagePct: { type: 'number', default: 1.0, description: 'Reject fill if price moved >x% from quote' },
+      },
+    },
+    defaultConfig: { exchange: 'binance', symbol: 'BTC/USDT', side: 'buy', amount: 0.001, mode: 'paper', maxSlippagePct: 1.0 },
+  },
+  {
+    name: 'Trading Portfolio Snapshot',
+    description: 'Read-only balances per exchange. Paper mode reads PaperWallet rows; live mode reads ccxt.fetchBalance(). No writes.',
+    poolType: 'trading',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['exchange'],
+      properties: {
+        exchange: { type: 'string', enum: ['binance', 'coinbase', 'kraken'] },
+        mode: { type: 'string', enum: ['paper', 'live'], default: 'paper' },
+        apiKey: { type: 'string', format: 'password' },
+        apiSecret: { type: 'string', format: 'password' },
+        symbols: { type: 'array', items: { type: 'string' } },
+        includeUsd: { type: 'boolean', default: true },
+      },
+    },
+    defaultConfig: { exchange: 'binance', mode: 'paper', includeUsd: true },
+  },
+  {
+    name: 'Arbitrage Watcher',
+    description: 'Read-only: watches a symbol across 2+ exchanges for durationSeconds; logs every observation, flags spreads ≥ minSpreadPct, optionally POSTs JSON to alertWebhookUrl. Never auto-trades.',
+    poolType: 'trading',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['exchanges', 'symbol'],
+      properties: {
+        exchanges: {
+          type: 'array',
+          minItems: 2,
+          items: { type: 'string', enum: ['binance', 'coinbase', 'kraken'] },
+        },
+        symbol: { type: 'string' },
+        minSpreadPct: { type: 'number', default: 0.5 },
+        durationSeconds: { type: 'integer', minimum: 5, maximum: 3600, default: 300 },
+        alertWebhookUrl: { type: 'string', format: 'uri' },
+      },
+    },
+    defaultConfig: { exchanges: ['binance', 'kraken'], symbol: 'BTC/USDT', minSpreadPct: 0.5, durationSeconds: 60 },
+  },
 ];
 
 async function upsertTemplate(t: SeedTemplate): Promise<void> {

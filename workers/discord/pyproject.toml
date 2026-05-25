@@ -8,6 +8,16 @@ dependencies = [
     "discord.py>=2.4.0",
 ]
 
+[project.scripts]
+hive-discord = "hive_discord.main:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hive_discord*"]
+
+[tool.setuptools.package-dir]
+"" = "src"

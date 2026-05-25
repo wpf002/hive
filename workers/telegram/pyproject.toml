@@ -8,6 +8,16 @@ dependencies = [
     "python-telegram-bot>=21.4",
 ]
 
+[project.scripts]
+hive-telegram = "hive_telegram.main:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hive_telegram*"]
+
+[tool.setuptools.package-dir]
+"" = "src"

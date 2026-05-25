@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import json
+import signal
 import socket
 import traceback
 import uuid
@@ -43,6 +44,7 @@ class HiveWorker(ABC):
         self._heartbeat: Optional[Heartbeat] = None
         self._status: str = "online"  # online | draining
         self._should_exit = False
+        self._in_flight_jobs: set[str] = set()
 
     def register(self, template_name: str, handler: Handler) -> None:
         self._handlers[template_name] = handler
@@ -149,15 +151,38 @@ class HiveWorker(ABC):
     async def _consume_one(self, entry_id: str, fields_map: dict[str, str]) -> None:
         async with self._sem:
             self._active_jobs += 1
+            job_id = fields_map.get("jobId", "")
+            if job_id:
+                self._in_flight_jobs.add(job_id)
             try:
                 await self._process(fields_map)
             finally:
+                if job_id:
+                    self._in_flight_jobs.discard(job_id)
                 self._active_jobs -= 1
                 try:
                     assert self._redis_main is not None
                     await self._redis_main.xack(self.stream, self.group, entry_id)
                 except Exception as e:
                     log.error("worker.xack_failed", err=str(e), entry_id=entry_id)
+
+    async def _graceful_shutdown(self, sig: str) -> None:
+        log.info("worker.signal", sig=sig, in_flight=len(self._in_flight_jobs))
+        self._should_exit = True
+        # Wait up to 5s for in-flight to settle naturally.
+        for _ in range(50):
+            if not self._in_flight_jobs:
+                break
+            await asyncio.sleep(0.1)
+        # Anything still in-flight on shutdown gets marked failed so the UI doesn't
+        # show forever-"running" jobs (e.g. long-lived Discord slash listeners).
+        for jid in list(self._in_flight_jobs):
+            try:
+                await dbmod.mark_failed(
+                    self.settings.DATABASE_URL, jid, "worker_killed (graceful shutdown)"
+                )
+            except Exception as e:
+                log.error("worker.mark_failed_on_shutdown_err", err=str(e), job_id=jid)
 
     async def _check_drain(self) -> bool:
         try:
@@ -211,6 +236,17 @@ class HiveWorker(ABC):
             socket_keepalive=True,
         )
         await self._ensure_group()
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(
+                    sig,
+                    lambda s=sig: asyncio.create_task(self._graceful_shutdown(s.name)),
+                )
+            except (NotImplementedError, RuntimeError):
+                # Windows / non-main-thread: fall back to default handlers.
+                pass
 
         self._heartbeat = Heartbeat(
             worker_id=self.worker_id,
