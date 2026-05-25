@@ -8,25 +8,59 @@ import type { PaperWallet, PaperTrade, TradeAudit, Job } from '@/lib/types';
 
 type Tab = 'wallets' | 'trades' | 'audit' | 'watchers';
 
+// Balances: show min 2 decimals (so $9922.98 stops being $9922.9801) but keep
+// up to 8 for crypto precision (0.001 BTC must not display as 0.00).
+const BALANCE_FMT = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 8,
+});
+
+function fmtBalance(v: string | number): string {
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  if (!isFinite(n)) return String(v);
+  return BALANCE_FMT.format(n);
+}
+
+// Audit actions arrive as machine codes like "order.filled" or "paper_wallet.seed".
+// Surface them in plain English for the audit log so the column doesn't look like
+// a raw JSON value.
+const ACTION_LABELS: Record<string, string> = {
+  'order.filled': 'Order filled',
+  'order.refused': 'Order refused',
+  'order.error': 'Order errored',
+  'order.starting': 'Order starting',
+  'paper_wallet.seed': 'Wallet seeded',
+};
+function humanizeAction(action: string): string {
+  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
+  // Generic fallback: "foo.bar_baz" → "Foo · bar baz"
+  const [head, ...rest] = action.split('.');
+  const tail = rest.join('.').replace(/_/g, ' ');
+  return tail
+    ? head[0].toUpperCase() + head.slice(1) + ' · ' + tail
+    : head[0].toUpperCase() + head.slice(1);
+}
+
 export default function TradingPage() {
   const [tab, setTab] = useState<Tab>('wallets');
   return (
     <div className="space-y-4 p-6">
       <div className="flex items-baseline justify-between">
-        <div>
+        <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
           <h1 className="text-2xl font-bold">Trading</h1>
-          <p className="font-mono text-xs text-hive-subtle">PAPER MODE BY DEFAULT · LIVE REQUIRES TRADING_LIVE_ENABLED=TRUE</p>
+          <p className="mt-1 font-mono text-xs text-hive-subtle">PAPER MODE BY DEFAULT</p>
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-hive-border">
+      <div className="flex gap-1 rounded-lg border border-hive-border bg-hive-surface px-2 pt-1">
         {(['wallets', 'trades', 'audit', 'watchers'] as Tab[]).map((t) => (
           <button
             key={t}
+            type="button"
             onClick={() => setTab(t)}
             className={cn(
               'rounded-t px-3 py-1.5 font-mono text-xs uppercase transition-colors',
-              tab === t ? 'bg-hive-surface text-honey-500' : 'text-hive-subtle hover:bg-hive-muted',
+              tab === t ? 'text-honey-500' : 'text-hive-subtle hover:bg-hive-muted',
             )}
           >
             {t === 'wallets' ? 'Paper Wallets' : t === 'trades' ? 'Trade History' : t === 'audit' ? 'Audit Log' : 'Watchers'}
@@ -84,9 +118,9 @@ function WalletsTab() {
               onChange={(e) => setExchange(e.target.value)}
               className="mt-1 rounded border border-hive-border bg-hive-bg px-2 py-1 font-mono text-xs"
             >
-              <option value="binance">binance</option>
-              <option value="coinbase">coinbase</option>
-              <option value="kraken">kraken</option>
+              <option value="binance">Binance</option>
+              <option value="coinbase">Coinbase</option>
+              <option value="kraken">Kraken</option>
             </select>
           </label>
           <label className="flex flex-col">
@@ -112,7 +146,7 @@ function WalletsTab() {
             disabled={seeding}
             className="rounded bg-honey-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-honey-400 disabled:opacity-60"
           >
-            {seeding ? 'Seeding…' : 'Seed funds'}
+            {seeding ? 'Seeding…' : 'Seed Funds'}
           </button>
           {error && <span className="font-mono text-xs text-red-400">{error}</span>}
         </div>
@@ -125,7 +159,7 @@ function WalletsTab() {
               <th className="px-4 py-2">Exchange</th>
               <th className="px-4 py-2">Currency</th>
               <th className="px-4 py-2 text-right">Balance</th>
-              <th className="px-4 py-2">Last update</th>
+              <th className="px-4 py-2 text-right">Last update</th>
             </tr>
           </thead>
           <tbody>
@@ -136,10 +170,10 @@ function WalletsTab() {
             )}
             {wallets.data?.map((w) => (
               <tr key={w.id} className="border-t border-hive-border">
-                <td className="px-4 py-2 font-mono text-xs">{w.exchange}</td>
+                <td className="px-4 py-2 font-mono text-xs capitalize">{w.exchange}</td>
                 <td className="px-4 py-2 font-mono text-xs">{w.currency}</td>
-                <td className="px-4 py-2 text-right font-mono text-xs">{w.balance}</td>
-                <td className="px-4 py-2 font-mono text-xs text-hive-subtle">{fmtRelative(w.updatedAt)}</td>
+                <td className="px-4 py-2 text-right font-mono text-xs">{fmtBalance(w.balance)}</td>
+                <td className="px-4 py-2 text-right font-mono text-xs text-hive-subtle">{fmtRelative(w.updatedAt)}</td>
               </tr>
             ))}
           </tbody>
@@ -227,19 +261,20 @@ function AuditTab() {
                 <td className="px-4 py-2">
                   <ModeBadge mode={a.mode} />
                 </td>
-                <td className="px-4 py-2 font-mono text-xs">{a.action}</td>
+                <td className="px-4 py-2 text-xs">{humanizeAction(a.action)}</td>
                 <td className="px-4 py-2 font-mono text-[10px] text-hive-subtle">
-                  <a href={`/bots/${a.botId}`} className="hover:text-honey-500">{a.botId.slice(0, 10)}</a>
+                  <a href={`/bots/${a.botId}`} title={a.botId} className="hover:text-honey-500">{a.botId.slice(-6)}</a>
                 </td>
                 <td className="px-4 py-2 font-mono text-[10px] text-hive-subtle">
-                  <a href={`/jobs/${a.jobId}`} className="hover:text-honey-500">{a.jobId.slice(0, 10)}</a>
+                  <a href={`/jobs/${a.jobId}`} title={a.jobId} className="hover:text-honey-500">{a.jobId.slice(-6)}</a>
                 </td>
                 <td className="px-4 py-2 text-right">
                   <button
+                    type="button"
                     onClick={() => setOpen(open === a.id ? null : a.id)}
-                    className="rounded border border-hive-border px-2 py-0.5 font-mono text-[10px] text-hive-subtle hover:text-honey-500"
+                    className="rounded border border-hive-border px-2 py-0.5 text-[10px] text-hive-subtle hover:text-honey-500"
                   >
-                    {open === a.id ? 'hide' : 'expand'}
+                    {open === a.id ? 'Hide' : 'Expand'}
                   </button>
                 </td>
               </tr>

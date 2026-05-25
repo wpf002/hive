@@ -35,9 +35,9 @@ export default function BotsPage() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-end justify-between">
-        <div>
+        <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
           <h1 className="text-2xl font-bold">Bots</h1>
-          <p className="font-mono text-xs text-hive-subtle">INSTANTIATED TEMPLATES · READY TO RUN</p>
+          <p className="mt-1 font-mono text-xs text-hive-subtle">INSTANTIATED TEMPLATES</p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
@@ -48,7 +48,7 @@ export default function BotsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {bots.data?.map((bot) => (
+        {bots.data?.slice().sort((a, b) => a.name.localeCompare(b.name)).map((bot) => (
           <div
             key={bot.id}
             className="relative overflow-hidden rounded-lg border border-hive-border bg-hive-surface p-4 transition-colors hover:border-honey-500/30"

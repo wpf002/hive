@@ -47,9 +47,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="font-mono text-xs text-hive-subtle">HIVE CONTROL PLANE · PHASE 1</p>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">HIVE CONTROL PLANE</p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Running" value={running.data?.length ?? 0} />
@@ -60,8 +60,8 @@ export default function DashboardPage() {
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
         <div className="flex items-center justify-between border-b border-hive-border px-4 py-3">
-          <h2 className="font-semibold">Recent jobs</h2>
-          <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">All jobs →</Link>
+          <h2 className="font-semibold">Recent Jobs</h2>
+          <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">All Jobs →</Link>
         </div>
         <table className="w-full text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">

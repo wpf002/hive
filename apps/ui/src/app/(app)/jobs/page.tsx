@@ -5,11 +5,19 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PoolBadge } from '@/components/PoolBadge';
-import { fmtDuration, fmtRelative } from '@/lib/format';
+import { fmtDuration, fmtRelative, fmtJobShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { Job, JobStatus, DlqEntry, Pool } from '@/lib/types';
 
 const STATUSES: (JobStatus | 'all')[] = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled'];
+const STATUS_LABELS: Record<JobStatus | 'all', string> = {
+  all: 'All',
+  queued: 'Queued',
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
 type Tab = 'jobs' | 'dlq';
 
 export default function JobsPage() {
@@ -30,7 +38,7 @@ export default function JobsPage() {
     enabled: tab === 'dlq',
   });
 
-  async function requeue(jobId: string) {
+  async function retry(jobId: string) {
     try {
       await api.post(`/api/jobs/${jobId}/requeue`);
       await qc.invalidateQueries({ queryKey: ['jobs'] });
@@ -41,47 +49,50 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4 p-6">
-      <div>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
         <h1 className="text-2xl font-bold">Jobs</h1>
-        <p className="font-mono text-xs text-hive-subtle">EVERY EXECUTION, NEWEST FIRST</p>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">EVERY EXECUTION</p>
       </div>
 
-      <div className="flex gap-1 border-b border-hive-border">
-        {(['jobs', 'dlq'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              '-mb-px border-b-2 px-3 py-1.5 font-mono text-xs uppercase',
-              tab === t
-                ? 'border-honey-500 text-honey-500'
-                : 'border-transparent text-hive-subtle hover:text-hive-text',
-            )}
-          >
-            {t === 'jobs' ? 'jobs' : `dead letter queue${dlq.data ? ` · ${dlq.data.length}` : ''}`}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'jobs' && (
-        <>
-          <div className="flex flex-wrap gap-2">
+      <div className="rounded-lg border border-hive-border bg-hive-surface">
+        <div className="flex gap-1 border-b border-hive-border px-2 pt-1">
+          {(['jobs', 'dlq'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={cn(
+                '-mb-px border-b-2 px-3 py-1.5 font-mono text-xs',
+                tab === t
+                  ? 'border-honey-500 text-honey-500'
+                  : 'border-transparent text-hive-subtle hover:text-hive-text',
+              )}
+            >
+              {t === 'jobs' ? 'Jobs' : `Quarantine${dlq.data ? ` · ${dlq.data.length}` : ''}`}
+            </button>
+          ))}
+        </div>
+        {tab === 'jobs' && (
+          <div className="flex flex-wrap gap-2 p-3">
             {STATUSES.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => setFilter(s)}
                 className={cn(
-                  'rounded border px-2 py-1 font-mono text-[11px] uppercase',
+                  'rounded border px-2 py-1 font-mono text-[11px]',
                   filter === s
                     ? 'border-honey-500 bg-honey-500/10 text-honey-500'
                     : 'border-hive-border text-hive-subtle hover:bg-hive-muted',
                 )}
-              >{s}</button>
+              >{STATUS_LABELS[s]}</button>
             ))}
           </div>
+        )}
+      </div>
 
+      {tab === 'jobs' && (
+        <>
           <div className="rounded-lg border border-hive-border bg-hive-surface">
             <table className="w-full text-sm">
               <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
@@ -137,7 +148,7 @@ export default function JobsPage() {
               {dlq.data?.map((d) => (
                 <tr key={d.entryId} className="border-t border-hive-border hover:bg-hive-muted/30">
                   <td className="px-4 py-2 font-mono text-xs">
-                    <Link href={`/jobs/${d.jobId}`} className="hover:text-honey-500">{d.jobId}</Link>
+                    <Link href={`/jobs/${d.jobId}`} title={d.jobId} className="hover:text-honey-500">{fmtJobShort(d.jobId)}</Link>
                   </td>
                   <td className="px-4 py-2"><PoolBadge pool={d.pool as Pool} /></td>
                   <td className="px-4 py-2 font-mono text-xs">{d.templateName}</td>
@@ -146,10 +157,11 @@ export default function JobsPage() {
                   <td className="px-4 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => requeue(d.jobId)}
+                      onClick={() => retry(d.jobId)}
+                      title="Re-queue this job using the bot's current config"
                       className="rounded border border-honey-500/30 px-2 py-0.5 text-xs text-honey-500 hover:bg-honey-500/10"
                     >
-                      requeue
+                      Retry
                     </button>
                   </td>
                 </tr>

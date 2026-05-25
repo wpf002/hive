@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PoolBadge } from '@/components/PoolBadge';
 import { LiveLogStream } from '@/components/LiveLogStream';
-import { fmtDateTime, fmtDuration } from '@/lib/format';
+import { fmtDateTime, fmtDuration, fmtJobShort } from '@/lib/format';
 import type { Job } from '@/lib/types';
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
@@ -47,7 +47,7 @@ export default function JobDetailPage() {
             {j.bot?.template?.poolType === 'trading' && (
               <TradingModeBadge config={j.bot.config as Record<string, unknown>} />
             )}
-            <span className="font-mono text-xs text-hive-subtle">{j.id}</span>
+            <span title={j.id} className="font-mono text-xs text-hive-subtle">{fmtJobShort(j.id)}</span>
           </div>
           <div className="font-mono text-xs text-hive-subtle">
             Bot: {j.bot && <Link className="hover:text-honey-500" href={`/bots/${j.botId}`}>{j.bot.name}</Link>}

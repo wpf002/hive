@@ -54,7 +54,6 @@ export function StatusBar() {
       <Pill label="Queued"  value={queued.data?.length ?? 0} />
       <Pill label="Running" value={running.data?.length ?? 0} />
       <div className="flex-1" />
-      <span className="font-mono text-[10px] text-hive-subtle">{api.base}</span>
     </footer>
   );
 }

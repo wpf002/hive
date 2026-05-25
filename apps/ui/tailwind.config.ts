@@ -35,7 +35,7 @@ const config: Config = {
         },
       },
       backgroundImage: {
-        'hex-grid': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 0L56 16.18v32.36L28 64.72 0 48.54V16.18z' fill='none' stroke='%23FFC107' stroke-opacity='0.05' stroke-width='1'/%3E%3C/svg%3E\")",
+        'hex-grid': "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 0L56 16.18v32.36L28 64.72 0 48.54V16.18z' fill='none' stroke='%23FFC107' stroke-opacity='0.18' stroke-width='1'/%3E%3C/svg%3E\")",
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui'],

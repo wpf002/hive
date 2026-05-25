@@ -20,6 +20,13 @@ export function fmtDuration(startISO: string | null, endISO: string | null): str
   return `${m}m ${s}s`;
 }
 
+/** Human-shortened job id: keeps just the last 6 entropy chars, prefixed with #.
+ * Full id is still in the URL and copy/paste-able from the title attribute. */
+export function fmtJobShort(id: string): string {
+  if (!id) return '';
+  return '#' + id.slice(-6);
+}
+
 export function fmtRelative(iso: string | Date): string {
   const d = typeof iso === 'string' ? new Date(iso) : iso;
   const ms = Date.now() - d.getTime();

@@ -14,8 +14,8 @@ export default function WorkersPage() {
     refetchInterval: 5_000,
   });
 
-  async function drain(w: Worker) {
-    if (!confirm(`Drain ${w.id}? It will finish in-flight jobs (${w.activeJobs}) and stop accepting new ones.`)) return;
+  async function stop(w: Worker) {
+    if (!confirm(`Stop ${w.id}? It will finish its ${w.activeJobs} in-flight job(s), then exit and stop accepting new ones.`)) return;
     try {
       await api.post(`/api/workers/${w.id}/drain`);
       await qc.invalidateQueries({ queryKey: ['workers'] });
@@ -31,9 +31,9 @@ export default function WorkersPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
         <h1 className="text-2xl font-bold">Workers</h1>
-        <p className="font-mono text-xs text-hive-subtle">HEARTBEATS EVERY 10S · OFFLINE AFTER 30S SILENCE</p>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">HEARTBEATS EVERY 10S · OFFLINE AFTER 30S SILENCE</p>
       </div>
       {Object.keys(grouped).length === 0 && (
         <div className="rounded-lg border border-dashed border-hive-border p-8 text-center font-mono text-sm text-hive-subtle">
@@ -82,10 +82,11 @@ export default function WorkersPage() {
                     {w.status === 'online' && (
                       <button
                         type="button"
-                        onClick={() => drain(w)}
+                        onClick={() => stop(w)}
+                        title="Finish in-flight jobs, then exit. Stops accepting new jobs immediately."
                         className="rounded border border-amber-500/30 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-500/10"
                       >
-                        drain
+                        Stop
                       </button>
                     )}
                   </td>

@@ -12,12 +12,15 @@ export default function TemplatesPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
         <h1 className="text-2xl font-bold">Templates</h1>
-        <p className="font-mono text-xs text-hive-subtle">READ-ONLY LIBRARY · SEEDED BY API</p>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">READ-ONLY LIBRARY</p>
       </div>
       <div className="space-y-3">
-        {tpls.data?.map((t) => (
+        {tpls.data
+          ?.slice()
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((t) => (
           <div key={t.id} className="rounded-lg border border-hive-border bg-hive-surface p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -27,16 +30,16 @@ export default function TemplatesPage() {
               <PoolBadge pool={t.poolType} />
             </div>
             <details className="mt-3">
-              <summary className="cursor-pointer font-mono text-xs text-hive-subtle hover:text-honey-500">
-                Config schema
+              <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-wider text-hive-subtle hover:text-honey-500">
+                Config Schema
               </summary>
               <pre className="mt-2 overflow-auto rounded border border-hive-border bg-black/40 p-2 font-mono text-[11px]">
                 {JSON.stringify(t.configSchema, null, 2)}
               </pre>
             </details>
             <details className="mt-2">
-              <summary className="cursor-pointer font-mono text-xs text-hive-subtle hover:text-honey-500">
-                Default config
+              <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-wider text-hive-subtle hover:text-honey-500">
+                Default Config
               </summary>
               <pre className="mt-2 overflow-auto rounded border border-hive-border bg-black/40 p-2 font-mono text-[11px]">
                 {JSON.stringify(t.defaultConfig, null, 2)}

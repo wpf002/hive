@@ -30,9 +30,9 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="space-y-4 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Change password</h1>
-        <p className="font-mono text-xs text-hive-subtle">CHANGING WILL INVALIDATE ALL YOUR OTHER SESSIONS</p>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
+        <h1 className="text-2xl font-bold">Change Password</h1>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">CHANGING WILL INVALIDATE ALL YOUR OTHER SESSIONS</p>
       </div>
       <form onSubmit={submit} className="max-w-md space-y-3 rounded-lg border border-hive-border bg-hive-surface p-4">
         <label className="block">

@@ -69,9 +69,9 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
+      <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
         <h1 className="text-2xl font-bold">Admin · Users</h1>
-        <p className="font-mono text-xs text-hive-subtle">ROLES · SESSIONS · AUDIT</p>
+        <p className="mt-1 font-mono text-xs text-hive-subtle">ROLES · SESSIONS · AUDIT</p>
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
@@ -110,6 +110,8 @@ export default function AdminUsersPage() {
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'user' })}
+                aria-label="Role"
+                title="Role"
                 className="rounded border border-hive-border bg-hive-bg px-2 py-1 font-mono text-xs"
               >
                 <option value="user">user</option>

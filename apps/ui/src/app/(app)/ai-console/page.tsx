@@ -54,7 +54,6 @@ interface SingleResult {
 }
 
 function fmtCents(c: number): string {
-  if (c < 100) return `${c}¢`;
   return `$${(c / 100).toFixed(2)}`;
 }
 
@@ -195,7 +194,7 @@ export default function AiConsolePage() {
 
       <div className="grid min-h-0 flex-1 grid-cols-12 gap-4 p-6">
         {/* Composer */}
-        <div className="col-span-5 flex min-h-0 flex-col gap-3">
+        <div className="col-span-5 flex min-h-0 flex-col gap-3 rounded-lg border border-hive-border bg-hive-surface p-4">
           <div>
             <button
               onClick={() => setSystemOpen((o) => !o)}
@@ -325,9 +324,9 @@ export default function AiConsolePage() {
         </div>
 
         {/* Results */}
-        <div className="col-span-5 min-h-0">
+        <div className="col-span-5 min-h-0 rounded-lg border border-hive-border bg-hive-surface p-4">
           {!jobId ? (
-            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-hive-border p-6 text-center font-mono text-sm text-hive-subtle">
+            <div className="flex h-full items-center justify-center rounded border border-dashed border-hive-border p-6 text-center font-mono text-sm text-hive-subtle">
               Run a prompt to see streaming logs and the rendered response here.
             </div>
           ) : (
@@ -336,7 +335,7 @@ export default function AiConsolePage() {
         </div>
 
         {/* Recent runs */}
-        <div className="col-span-2 min-h-0 space-y-2 overflow-auto">
+        <div className="col-span-2 min-h-0 space-y-2 overflow-auto rounded-lg border border-hive-border bg-hive-surface p-3">
           <div className="font-mono text-[11px] uppercase text-hive-subtle">Recent runs</div>
           <div className="space-y-1">
             {recent.data?.map((r) => (
@@ -373,11 +372,18 @@ export default function AiConsolePage() {
 
 function CostMeter({ totalCostCents, calls }: { totalCostCents: number; calls: number }) {
   return (
-    <div className="rounded-lg border border-hive-border bg-hive-bg px-3 py-1.5">
-      <div className="font-mono text-[10px] uppercase text-hive-subtle">Today · AI spend</div>
-      <div className="flex items-baseline gap-2">
-        <span className="text-xl font-semibold text-honey-500">{fmtCents(totalCostCents)}</span>
-        <span className="font-mono text-[10px] text-hive-subtle">{calls} calls</span>
+    <div className="grid grid-cols-2 divide-x divide-hive-border overflow-hidden rounded-lg border border-hive-border bg-hive-bg">
+      <div className="border-b border-hive-border px-4 py-1.5 text-center font-mono text-[10px] uppercase tracking-wider text-hive-subtle">
+        Today
+      </div>
+      <div className="border-b border-hive-border px-4 py-1.5 text-center font-mono text-[10px] uppercase tracking-wider text-hive-subtle">
+        Calls
+      </div>
+      <div className="px-4 py-2 text-center text-xl font-semibold leading-none text-honey-500">
+        {fmtCents(totalCostCents)}
+      </div>
+      <div className="px-4 py-2 text-center font-mono text-xl leading-none text-hive-text">
+        {calls}
       </div>
     </div>
   );

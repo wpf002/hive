@@ -33,7 +33,7 @@ export function PoolBadge({ pool, className }: { pool: Pool; className?: string 
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide',
+        'inline-flex shrink-0 items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide',
         POOL_COLORS[pool],
         className,
       )}

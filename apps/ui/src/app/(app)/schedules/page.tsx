@@ -29,9 +29,9 @@ export default function SchedulesPage() {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-end justify-between">
-        <div>
+        <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
           <h1 className="text-2xl font-bold">Schedules</h1>
-          <p className="font-mono text-xs text-hive-subtle">CRON-DRIVEN BOT RUNS · TICKS EVERY 30S</p>
+          <p className="mt-1 font-mono text-xs text-hive-subtle">CRON-DRIVEN BOT RUNS</p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
@@ -92,7 +92,7 @@ export default function SchedulesPage() {
               </tr>
             ))}
             {schedules.data && schedules.data.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No schedules. Click + New Schedule to add one.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No schedules. Click &ldquo;+ New Schedule&rdquo; to add one.</td></tr>
             )}
           </tbody>
         </table>

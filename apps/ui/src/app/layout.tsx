@@ -11,7 +11,7 @@ export const metadata = { title: 'Hive', description: 'Distributed bot orchestra
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`dark ${inter.variable} ${jetbrains.variable}`}>
-      <body className="bg-hive-bg text-hive-text min-h-screen bg-hex-grid font-sans">
+      <body className="bg-hive-bg text-hive-text h-screen overflow-hidden bg-hex-grid font-sans">
         <Providers>{children}</Providers>
       </body>
     </html>
