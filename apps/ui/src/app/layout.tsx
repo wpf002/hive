@@ -5,6 +5,7 @@ import Providers from './providers';
 import { Sidebar } from '@/components/Sidebar';
 import { StatusBar } from '@/components/StatusBar';
 import { CommandPalette } from '@/components/CommandPalette';
+import { LiveTradingBanner } from '@/components/LiveTradingBanner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="bg-hive-bg text-hive-text min-h-screen bg-hex-grid font-sans">
         <Providers>
           <div className="flex h-screen flex-col">
+            <LiveTradingBanner />
             <div className="flex min-h-0 flex-1">
               <Sidebar />
               <main className="flex-1 overflow-auto">{children}</main>

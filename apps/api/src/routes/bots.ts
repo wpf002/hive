@@ -3,6 +3,29 @@ import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth } from '../auth.js';
 
+// Field names whose values should be masked on outbound GETs (keep last 4 chars).
+// Trading bots store apiSecret + apiKey; Discord/Telegram store botToken.
+const SECRET_KEYS = new Set(['apiSecret', 'apiKey', 'botToken']);
+
+function maskValue(v: unknown): unknown {
+  if (typeof v !== 'string' || v.length === 0) return v;
+  if (v.length <= 4) return '****';
+  return '****' + v.slice(-4);
+}
+
+function maskConfig(config: unknown): unknown {
+  if (config == null || typeof config !== 'object') return config;
+  const out: Record<string, unknown> = { ...(config as Record<string, unknown>) };
+  for (const k of Object.keys(out)) {
+    if (SECRET_KEYS.has(k)) out[k] = maskValue(out[k]);
+  }
+  return out;
+}
+
+function maskBot<T extends { config: unknown }>(bot: T): T {
+  return { ...bot, config: maskConfig(bot.config) };
+}
+
 const Create = z.object({
   templateId: z.string().min(1),
   name: z.string().min(1),
@@ -38,10 +61,11 @@ export async function botRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/bots', { preHandler: requireAuth('api') }, async () => {
-    return prisma.bot.findMany({
+    const rows = await prisma.bot.findMany({
       orderBy: { createdAt: 'desc' },
       include: { template: true },
     });
+    return rows.map(maskBot);
   });
 
   app.get<{ Params: { id: string } }>(
@@ -56,7 +80,7 @@ export async function botRoutes(app: FastifyInstance) {
         },
       });
       if (!bot) return reply.code(404).send({ error: { code: 'not_found', message: 'bot not found' } });
-      return bot;
+      return maskBot(bot);
     },
   );
 

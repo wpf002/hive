@@ -2,3 +2,4 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'workers/ai_agent'
+  - 'workers/trading'

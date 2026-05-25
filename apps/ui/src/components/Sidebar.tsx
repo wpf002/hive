@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Sparkles, Menu, Clock } from 'lucide-react';
+import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Sparkles, Menu, Clock, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { href: '/templates',  label: 'Templates',  icon: BookTemplate },
   { href: '/jobs',       label: 'Jobs',       icon: ListChecks },
   { href: '/schedules',  label: 'Schedules',  icon: Clock },
+  { href: '/trading',    label: 'Trading',    icon: TrendingUp },
   { href: '/workers',    label: 'Workers',    icon: Cpu },
   { href: '/ai-console', label: 'AI Console', icon: Sparkles },
 ];

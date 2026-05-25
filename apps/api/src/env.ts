@@ -8,6 +8,7 @@ const Env = z.object({
   REDIS_URL: z.string().min(1),
   API_AUTH_TOKEN: z.string().min(16),
   WORKER_AUTH_TOKEN: z.string().min(16),
+  TRADING_LIVE_ENABLED: z.enum(['true', 'false']).default('false'),
 });
 
 export const env = Env.parse(process.env);

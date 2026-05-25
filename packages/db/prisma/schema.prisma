@@ -109,3 +109,50 @@ model AiUsage {
 
   @@index([provider, createdAt])
 }
+
+// ============ Trading (Phase 3b) ============
+
+model PaperWallet {
+  id        String   @id @default(cuid())
+  exchange  String
+  currency  String
+  balance   Decimal  @default(0) @db.Decimal(18, 8)
+  botId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([exchange, currency])
+  @@index([botId])
+}
+
+model PaperTrade {
+  id            String   @id @default(cuid())
+  jobId         String
+  exchange      String
+  symbol        String
+  side          String   // buy | sell
+  type          String   // market | limit
+  amount        Decimal  @db.Decimal(18, 8)
+  price         Decimal? @db.Decimal(18, 8)
+  status        String   // filled | cancelled | failed
+  executedPrice Decimal? @db.Decimal(18, 8)
+  createdAt     DateTime @default(now())
+
+  @@index([jobId])
+  @@index([symbol, createdAt])
+}
+
+model TradeAudit {
+  id        String   @id @default(cuid())
+  jobId     String
+  botId     String
+  mode      String   // paper | live
+  action    String
+  payload   Json
+  result    Json
+  createdAt DateTime @default(now())
+
+  @@index([botId, createdAt])
+  @@index([mode, createdAt])
+  @@index([jobId])
+}

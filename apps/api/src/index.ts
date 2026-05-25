@@ -11,6 +11,7 @@ import { workerRoutes } from './routes/workers.js';
 import { sseRoutes } from './routes/sse.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { aiRoutes } from './routes/ai.js';
+import { tradingRoutes } from './routes/trading.js';
 
 const app = Fastify({ logger: loggerOptions });
 
@@ -25,6 +26,7 @@ app.register(workerRoutes);
 app.register(sseRoutes);
 app.register(scheduleRoutes);
 app.register(aiRoutes);
+app.register(tradingRoutes);
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

@@ -44,6 +44,9 @@ export default function JobDetailPage() {
           <div className="flex items-center gap-2">
             <StatusBadge status={j.status} />
             {j.bot?.template && <PoolBadge pool={j.bot.template.poolType} />}
+            {j.bot?.template?.poolType === 'trading' && (
+              <TradingModeBadge config={j.bot.config as Record<string, unknown>} />
+            )}
             <span className="font-mono text-xs text-hive-subtle">{j.id}</span>
           </div>
           <div className="font-mono text-xs text-hive-subtle">
@@ -119,6 +122,22 @@ function Info({ label, value }: { label: string; value: string }) {
       <div className="font-mono text-[10px] uppercase text-hive-subtle">{label}</div>
       <div className="mt-1 font-mono text-xs">{value}</div>
     </div>
+  );
+}
+
+function TradingModeBadge({ config }: { config: Record<string, unknown> }) {
+  const mode = config?.mode === 'live' ? 'live' : 'paper';
+  return (
+    <span
+      className={
+        'inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ' +
+        (mode === 'live'
+          ? 'border-red-500/60 bg-red-500/20 text-red-300'
+          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400')
+      }
+    >
+      {mode}
+    </span>
   );
 }
 

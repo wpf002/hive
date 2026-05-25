@@ -1,10 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@hive/db';
 import { redis } from './redis.js';
+import { env } from './env.js';
 
 const startedAt = Date.now();
 
 export function registerHealth(app: FastifyInstance) {
+  app.get('/api/sysinfo', async () => ({
+    tradingLiveEnabled: env.TRADING_LIVE_ENABLED === 'true',
+    signupsEnabled: process.env.SIGNUPS_ENABLED === 'true',
+    nodeEnv: env.NODE_ENV,
+  }));
+
   app.get('/healthz', async () => {
     const checks: Record<string, { ok: boolean; error?: string }> = {
       postgres: { ok: true },

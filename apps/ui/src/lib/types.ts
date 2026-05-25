@@ -103,3 +103,44 @@ export interface AiUsage {
   costCents: number;
   createdAt: string;
 }
+
+export interface PaperWallet {
+  id: string;
+  exchange: string;
+  currency: string;
+  balance: string;
+  botId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaperTrade {
+  id: string;
+  jobId: string;
+  exchange: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  type: 'market' | 'limit';
+  amount: string;
+  price: string | null;
+  status: 'filled' | 'cancelled' | 'failed';
+  executedPrice: string | null;
+  createdAt: string;
+}
+
+export interface TradeAudit {
+  id: string;
+  jobId: string;
+  botId: string;
+  mode: 'paper' | 'live';
+  action: string;
+  payload: Record<string, unknown>;
+  result: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface SysInfo {
+  tradingLiveEnabled: boolean;
+  signupsEnabled: boolean;
+  nodeEnv: string;
+}
