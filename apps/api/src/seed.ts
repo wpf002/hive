@@ -1,4 +1,5 @@
 import { prisma, Prisma } from '@hive/db';
+import { hashPassword } from './lib/passwords.js';
 
 type SeedTemplate = {
   name: string;
@@ -386,8 +387,34 @@ async function upsertTemplate(t: SeedTemplate): Promise<void> {
   }
 }
 
+async function seedAdmin(): Promise<void> {
+  const adminCount = await prisma.user.count({ where: { role: 'admin' } });
+  if (adminCount > 0) {
+    console.log(`✓ admin user already present (${adminCount} admin${adminCount === 1 ? '' : 's'} found)`);
+    return;
+  }
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) {
+    throw new Error(
+      'no admin user exists and ADMIN_EMAIL / ADMIN_PASSWORD are not set — refusing to leave Hive without an admin',
+    );
+  }
+  const passwordHash = await hashPassword(password);
+  const user = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      displayName: email.split('@')[0],
+      role: 'admin',
+    },
+  });
+  console.log(`✓ seeded admin user "${email}" (${user.id})`);
+}
+
 async function main() {
   for (const t of TEMPLATES) await upsertTemplate(t);
+  await seedAdmin();
 }
 
 main()

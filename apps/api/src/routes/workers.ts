@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 import { redis } from '../redis.js';
+import { writeAuditLog } from '../lib/audit.js';
 
 const Heartbeat = z.object({
   workerId: z.string().min(1),
@@ -66,13 +67,20 @@ export async function workerRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     '/api/workers/:id/drain',
-    { preHandler: requireAuth('api') },
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const worker = await prisma.worker.findUnique({ where: { id: req.params.id } });
       if (!worker) {
         return reply.code(404).send({ error: { code: 'not_found', message: 'worker not found' } });
       }
       await redis.set(drainKey(req.params.id), '1', 'EX', DRAIN_TTL_S);
+      await writeAuditLog(req, {
+        userId: req.user?.id ?? null,
+        action: 'worker.drain',
+        targetType: 'worker',
+        targetId: req.params.id,
+        payload: { poolType: worker.poolType, hostname: worker.hostname },
+      });
       return { ok: true, workerId: req.params.id, ttlSeconds: DRAIN_TTL_S };
     },
   );

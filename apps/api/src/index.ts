@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import { env } from './env.js';
 import { loggerOptions } from './log.js';
 import { registerHealth } from './health.js';
@@ -12,13 +13,20 @@ import { sseRoutes } from './routes/sse.js';
 import { scheduleRoutes } from './routes/schedules.js';
 import { aiRoutes } from './routes/ai.js';
 import { tradingRoutes } from './routes/trading.js';
+import { authRoutes } from './routes/auth.js';
 
 const app = Fastify({ logger: loggerOptions });
 
-app.register(cors, { origin: true, credentials: true });
+// CORS must allow credentials so the browser sends session cookies on /api/*.
+app.register(cors, {
+  origin: (_origin, cb) => cb(null, true),
+  credentials: true,
+});
+app.register(cookie);
 
 registerErrorHandler(app);
 registerHealth(app);
+app.register(authRoutes);
 app.register(templateRoutes);
 app.register(botRoutes);
 app.register(jobRoutes);

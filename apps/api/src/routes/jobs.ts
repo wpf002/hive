@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 import { redis, STREAMS } from '../redis.js';
+import { writeAuditLog } from '../lib/audit.js';
 
 const RunBody = z.object({
   overrideConfig: z.record(z.unknown()).optional(),
@@ -119,7 +120,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     '/api/jobs/:id/requeue',
-    { preHandler: requireAuth('api') },
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const job = await prisma.job.findUnique({
         where: { id: req.params.id },
@@ -129,6 +130,13 @@ export async function jobRoutes(app: FastifyInstance) {
       if (job.status !== 'failed') {
         return reply.code(409).send({ error: { code: 'not_failed', message: `job is ${job.status}, only failed jobs can be requeued` } });
       }
+      await writeAuditLog(req, {
+        userId: req.user?.id ?? null,
+        action: 'job.requeue',
+        targetType: 'job',
+        targetId: job.id,
+        payload: { botId: job.botId, pool: job.bot.template.poolType },
+      });
       // Requeue uses the bot's CURRENT config, not the job's original payload,
       // so a fix to the bot config takes effect on requeue.
       const config = job.bot.config as Record<string, unknown>;

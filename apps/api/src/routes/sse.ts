@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '@hive/db';
 import { env } from '../env.js';
 import { createBlockingRedis, STREAMS } from '../redis.js';
+import { findValidSession, SESSION_COOKIE } from '../lib/sessions.js';
 
 const HEARTBEAT_MS = 15_000;
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
@@ -11,18 +12,26 @@ function sseWrite(reply: FastifyReply, event: string, data: unknown) {
   reply.raw.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
-function authorize(req: FastifyRequest): boolean {
-  // Auth from header first, then ?token= fallback (EventSource can't set headers — UI uses fetch but keep this for tooling).
+async function authorize(req: FastifyRequest): Promise<boolean> {
+  // 1) Bearer token (header or ?token= query fallback for tooling).
   const header = req.headers.authorization;
   const headerToken = typeof header === 'string' ? /^Bearer\s+(.+)$/i.exec(header.trim())?.[1] : undefined;
   const queryToken = (req.query as Record<string, unknown>)?.token;
   const token = headerToken ?? (typeof queryToken === 'string' ? queryToken : undefined);
-  return token === env.API_AUTH_TOKEN;
+  if (token === env.API_AUTH_TOKEN) return true;
+  // 2) Session cookie.
+  const cookies = (req as FastifyRequest & { cookies?: Record<string, string | undefined> }).cookies;
+  const sessionToken = cookies?.[SESSION_COOKIE];
+  if (sessionToken) {
+    const session = await findValidSession(sessionToken);
+    if (session) return true;
+  }
+  return false;
 }
 
 export async function sseRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/jobs/:id/stream', async (req, reply) => {
-    if (!authorize(req)) {
+    if (!(await authorize(req))) {
       return reply.code(401).send({ error: { code: 'unauthorized', message: 'missing bearer token' } });
     }
 

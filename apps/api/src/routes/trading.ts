@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
+import { writeAuditLog } from '../lib/audit.js';
 
 const SeedBody = z.object({
   exchange: z.string().min(1),
@@ -23,25 +24,37 @@ const PaperTradesQuery = z.object({
 });
 
 export async function tradingRoutes(app: FastifyInstance) {
-  // Seed / top up a paper wallet. Admin convenience for testing — gets locked
-  // down to admin-only in Phase 3c when auth lands.
-  app.post('/api/paper-wallet/seed', { preHandler: requireAuth('api') }, async (req, reply) => {
+  // Seed / top up a paper wallet — admin only.
+  app.post('/api/paper-wallet/seed', { preHandler: requireRole('admin') }, async (req, reply) => {
     const body = SeedBody.parse(req.body);
     const amount = new Prisma.Decimal(body.amount);
     const existing = await prisma.paperWallet.findUnique({
       where: { exchange_currency: { exchange: body.exchange, currency: body.currency } },
     });
+    let result;
+    let action: 'topped_up' | 'created';
     if (existing) {
       const updated = await prisma.paperWallet.update({
         where: { id: existing.id },
         data: { balance: existing.balance.plus(amount) },
       });
-      return reply.code(200).send({ ...updated, seeded: body.amount, action: 'topped_up' });
+      result = updated;
+      action = 'topped_up';
+    } else {
+      const created = await prisma.paperWallet.create({
+        data: { exchange: body.exchange, currency: body.currency, balance: amount },
+      });
+      result = created;
+      action = 'created';
     }
-    const created = await prisma.paperWallet.create({
-      data: { exchange: body.exchange, currency: body.currency, balance: amount },
+    await writeAuditLog(req, {
+      userId: req.user?.id ?? null,
+      action: 'paper_wallet.seed',
+      targetType: 'paper_wallet',
+      targetId: result.id,
+      payload: { exchange: body.exchange, currency: body.currency, amount: body.amount, action },
     });
-    return reply.code(201).send({ ...created, seeded: body.amount, action: 'created' });
+    return reply.code(action === 'created' ? 201 : 200).send({ ...result, seeded: body.amount, action });
   });
 
   app.get('/api/paper-wallet', { preHandler: requireAuth('api') }, async () => {
