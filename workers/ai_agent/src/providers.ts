@@ -12,6 +12,11 @@ export interface CallParams {
   maxTokens?: number;
   temperature?: number;
   jsonMode?: boolean;
+  /** When true, the assembled response is built from streamed chunks and each
+   * chunk is published via joblog('ai.chunk') so the UI renders incrementally.
+   * Only respected on `callProvider` (single-call path); the multi-provider
+   * synthesis call is always non-streaming. */
+  stream?: boolean;
 }
 
 export interface CallResult {
@@ -65,9 +70,28 @@ export async function callProvider(params: CallParams, log: JobLogger, jobId: st
   const t0 = Date.now();
   try {
     let result: { response: string; inputTokens: number; outputTokens: number };
-    if (provider === 'claude') result = await callClaude({ key, model, systemPrompt, userPrompt, maxTokens, temperature });
-    else if (provider === 'gpt') result = await callOpenAI({ key, model, systemPrompt, userPrompt, maxTokens, temperature, jsonMode: !!params.jsonMode });
-    else result = await callPerplexity({ key, model, systemPrompt, userPrompt, maxTokens, temperature });
+    if (params.stream) {
+      if (provider === 'claude') {
+        result = await callClaudeStreaming({ key, model, systemPrompt, userPrompt, maxTokens, temperature }, log);
+      } else if (provider === 'gpt') {
+        result = await callOpenAIStreaming(
+          { key, model, systemPrompt, userPrompt, maxTokens, temperature, jsonMode: !!params.jsonMode },
+          log,
+        );
+      } else {
+        // Perplexity streaming is omitted in this phase — fall back to a single
+        // chunk so the UI still updates once at completion.
+        await log.info('ai.stream_unsupported', { provider, note: 'falling back to non-streaming' });
+        result = await callPerplexity({ key, model, systemPrompt, userPrompt, maxTokens, temperature });
+        await log.info('ai.chunk', { text: result.response });
+      }
+    } else if (provider === 'claude') {
+      result = await callClaude({ key, model, systemPrompt, userPrompt, maxTokens, temperature });
+    } else if (provider === 'gpt') {
+      result = await callOpenAI({ key, model, systemPrompt, userPrompt, maxTokens, temperature, jsonMode: !!params.jsonMode });
+    } else {
+      result = await callPerplexity({ key, model, systemPrompt, userPrompt, maxTokens, temperature });
+    }
 
     const latencyMs = Date.now() - t0;
     const costCents = calculateCostCents(provider, model, result.inputTokens, result.outputTokens);
@@ -155,6 +179,80 @@ async function callOpenAI(args: {
     inputTokens: resp.usage?.prompt_tokens ?? 0,
     outputTokens: resp.usage?.completion_tokens ?? 0,
   };
+}
+
+async function callClaudeStreaming(
+  args: {
+    key: string; model: string; systemPrompt?: string; userPrompt: string; maxTokens: number; temperature: number;
+  },
+  log: JobLogger,
+): Promise<{ response: string; inputTokens: number; outputTokens: number }> {
+  const client = new Anthropic({ apiKey: args.key });
+  const stream = client.messages.stream({
+    model: args.model,
+    max_tokens: args.maxTokens,
+    temperature: args.temperature,
+    system: args.systemPrompt,
+    messages: [{ role: 'user', content: args.userPrompt }],
+  });
+  let buf = '';
+  for await (const event of stream) {
+    if (
+      event.type === 'content_block_delta' &&
+      event.delta.type === 'text_delta' &&
+      event.delta.text
+    ) {
+      buf += event.delta.text;
+      await log.info('ai.chunk', { text: event.delta.text });
+    }
+  }
+  const final = await stream.finalMessage();
+  const fullText = final.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n') || buf;
+  return {
+    response: fullText,
+    inputTokens: final.usage.input_tokens,
+    outputTokens: final.usage.output_tokens,
+  };
+}
+
+async function callOpenAIStreaming(
+  args: {
+    key: string; model: string; systemPrompt?: string; userPrompt: string;
+    maxTokens: number; temperature: number; jsonMode: boolean;
+  },
+  log: JobLogger,
+): Promise<{ response: string; inputTokens: number; outputTokens: number }> {
+  const client = new OpenAI({ apiKey: args.key });
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  if (args.systemPrompt) messages.push({ role: 'system', content: args.systemPrompt });
+  messages.push({ role: 'user', content: args.userPrompt });
+  const stream = await client.chat.completions.create({
+    model: args.model,
+    messages,
+    max_tokens: args.maxTokens,
+    temperature: args.temperature,
+    stream: true,
+    stream_options: { include_usage: true },
+    ...(args.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+  });
+  let buf = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for await (const chunk of stream) {
+    const delta = chunk.choices?.[0]?.delta?.content;
+    if (delta) {
+      buf += delta;
+      await log.info('ai.chunk', { text: delta });
+    }
+    if (chunk.usage) {
+      inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
+      outputTokens = chunk.usage.completion_tokens ?? outputTokens;
+    }
+  }
+  return { response: buf, inputTokens, outputTokens };
 }
 
 async function callPerplexity(args: {

@@ -13,6 +13,7 @@ const SingleConfig = z.object({
   maxTokens: z.number().int().positive().optional(),
   temperature: z.number().min(0).max(2).optional(),
   jsonMode: z.boolean().optional(),
+  stream: z.boolean().optional(),
 });
 
 export const singleCallHandler: Handler = async (rawConfig, { log, jobId }) => {
@@ -26,10 +27,21 @@ export const singleCallHandler: Handler = async (rawConfig, { log, jobId }) => {
       maxTokens: config.maxTokens,
       temperature: config.temperature,
       jsonMode: config.jsonMode,
+      stream: config.stream,
     },
     log,
     jobId,
   );
+  if (config.stream) {
+    await log.info('ai.response.complete', {
+      provider: result.provider,
+      model: result.model,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      costCents: result.costCents,
+      latencyMs: result.latencyMs,
+    });
+  }
 
   let parsed: unknown = undefined;
   if (config.jsonMode) {

@@ -57,7 +57,7 @@ const TEMPLATES: SeedTemplate[] = [
   },
   {
     name: 'AI Single Call',
-    description: 'One-shot call to a single AI provider (Claude / GPT / Perplexity). Returns response + token usage + cost.',
+    description: 'One-shot call to a single AI provider (Claude / GPT / Perplexity). Returns response + token usage + cost. Set stream=true to publish each chunk via joblog (renders incrementally in the AI Console). Perplexity streaming is not supported in this phase — the worker silently falls back to one chunk.',
     poolType: 'ai_agent',
     configSchema: {
       type: 'object',
@@ -71,6 +71,7 @@ const TEMPLATES: SeedTemplate[] = [
         maxTokens: { type: 'integer', minimum: 1, default: 2048 },
         temperature: { type: 'number', minimum: 0, maximum: 2, default: 0.7 },
         jsonMode: { type: 'boolean', default: false },
+        stream: { type: 'boolean', default: false, description: 'Streaming text via ai.chunk events (Claude + GPT only).' },
       },
     },
     defaultConfig: {
@@ -78,11 +79,12 @@ const TEMPLATES: SeedTemplate[] = [
       userPrompt: 'What is 2+2? Answer in one word.',
       maxTokens: 256,
       temperature: 0.7,
+      stream: false,
     },
   },
   {
     name: 'AI Multi-Provider Verdict',
-    description: 'Fans the same prompt out to multiple AI providers in parallel, then synthesizes a verdict.',
+    description: 'Fans the same prompt out to multiple AI providers in parallel, then synthesizes a verdict. Streaming is not supported in this phase (multi-provider chunking UX deferred).',
     poolType: 'ai_agent',
     configSchema: {
       type: 'object',

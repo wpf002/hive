@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { PromptEditor } from '@/components/PromptEditor';
 import { LiveLogStream } from '@/components/LiveLogStream';
+import { StreamingResponse } from '@/components/StreamingResponse';
 import { StatusBadge } from '@/components/StatusBadge';
 import { cn } from '@/lib/cn';
 import { fmtRelative } from '@/lib/format';
@@ -72,6 +73,7 @@ export default function AiConsolePage() {
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(1024);
   const [verdictMode, setVerdictMode] = useState<VerdictMode>('consensus');
+  const [stream, setStream] = useState(true);
   const [jobId, setJobId] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -142,6 +144,7 @@ export default function AiConsolePage() {
           userPrompt,
           maxTokens,
           temperature,
+          stream,
         };
 
     setRunning(true);
@@ -296,6 +299,20 @@ export default function AiConsolePage() {
             </label>
           </div>
 
+          <label className={cn(
+            'flex items-center gap-2 font-mono text-[11px] uppercase text-hive-subtle',
+            isMulti && 'opacity-40 cursor-not-allowed',
+          )}>
+            <input
+              type="checkbox"
+              checked={!isMulti && stream}
+              disabled={isMulti}
+              onChange={(e) => setStream(e.target.checked)}
+              className="accent-honey-500"
+            />
+            Stream response {isMulti && '(single-call only)'}
+          </label>
+
           {runError && <div className="font-mono text-xs text-red-400">{runError}</div>}
 
           <button
@@ -370,6 +387,7 @@ function ResultPane({ jobId, job, isMulti }: { jobId: string; job: Job | null; i
   const done = job && (job.status === 'succeeded' || job.status === 'failed' || job.status === 'cancelled');
   return (
     <div className="flex h-full flex-col gap-3">
+      {!isMulti && <StreamingResponse jobId={jobId} />}
       <LiveLogStream jobId={jobId} />
       {done && job.status === 'succeeded' && (
         isMulti
