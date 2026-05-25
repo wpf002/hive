@@ -6,6 +6,7 @@ from .logging import configure_logging
 from .joblog import JobLogger
 from .heartbeat import Heartbeat
 from .worker import HiveWorker
+from . import crypto
 
 __all__ = [
     "Settings",
@@ -14,4 +15,5 @@ __all__ = [
     "JobLogger",
     "Heartbeat",
     "HiveWorker",
+    "crypto",
 ]

@@ -1,13 +1,23 @@
 [project]
 name = "hive-task-runner"
 version = "0.1.0"
-description = "Generic distributed tasks (arq)"
+description = "Generic distributed tasks — subprocess runner, NOT arq (pool name is historical)"
 requires-python = ">=3.11"
 dependencies = [
     "hive-base",
-    "arq>=0.26.0",
+    "aiohttp>=3.10.0",
 ]
+
+[project.scripts]
+hive-task-runner = "hive_task_runner.main:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hive_task_runner*"]
+
+[tool.setuptools.package-dir]
+"" = "src"

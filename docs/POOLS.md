@@ -9,7 +9,30 @@
 | telegram | Python + python-telegram-bot | Telegram bots |
 | trading | TypeScript + ccxt | Market making, arbitrage, Crossbar |
 | monitor | Python + apscheduler | Uptime, alerting, cron probes |
-| mcp_host | TypeScript + MCP SDK | MCP server fleet |
+| mcp_host | TypeScript + MCP SDK | MCP server fleet — see [MCP.md](./MCP.md) |
 | ci_agent | Python + Docker SDK | CI runners, build agents |
-| task_runner | Python + arq | Generic distributed tasks |
+| task_runner | Python (subprocess) | Generic distributed tasks (Python, shell, webhook receivers) |
 | ai_agent | TypeScript + Anthropic/OpenAI/Perplexity | Claude / GPT / Perplexity orchestration |
+
+## ci_agent
+
+Requires `/var/run/docker.sock` reachable by the worker user. On Linux:
+
+```
+sudo chgrp docker /var/run/docker.sock
+sudo usermod -aG docker $USER  # then log out / back in
+```
+
+On macOS, Docker Desktop is enough — no extra dance required.
+
+Templates: `GitHub Repo Test Runner`, `Docker Image Builder`, `Shell Command Runner`.
+
+`timeoutSeconds` is enforced by `container.wait(timeout=…)` plus an outer asyncio.wait_for; on timeout the container is force-killed and removed so no zombies accumulate.
+
+## task_runner
+
+The pool name is historical (originally targeted arq). The current implementation does **not** use arq — handlers run as subprocesses on the worker host with a wall-clock timeout. Memory caps via `resource.setrlimit(RLIMIT_AS, …)` only take effect on Linux; on macOS the limit is silently ignored.
+
+Templates: `Python Script Runner`, `Shell Command Runner (Native)`, `Generic Webhook Receiver Echo`.
+
+**Security tradeoff for `Shell Command Runner (Native)`**: this runs the user-supplied command directly on the worker host, with no container isolation. Treat the template like RCE. Use the ci_agent `Shell Command Runner` (which runs inside Docker) unless you specifically need host access (and trust the operators).

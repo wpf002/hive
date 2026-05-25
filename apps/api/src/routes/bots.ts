@@ -2,28 +2,17 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth } from '../auth.js';
+import { encryptBotConfig, maskBotConfig } from '../lib/secrets.js';
 
-// Field names whose values should be masked on outbound GETs (keep last 4 chars).
-// Trading bots store apiSecret + apiKey; Discord/Telegram store botToken.
-const SECRET_KEYS = new Set(['apiSecret', 'apiKey', 'botToken']);
+type TemplateForSecrets = { configSchema: unknown };
 
-function maskValue(v: unknown): unknown {
-  if (typeof v !== 'string' || v.length === 0) return v;
-  if (v.length <= 4) return '****';
-  return '****' + v.slice(-4);
+interface BotWithTemplate {
+  config: unknown;
+  template: TemplateForSecrets;
 }
 
-function maskConfig(config: unknown): unknown {
-  if (config == null || typeof config !== 'object') return config;
-  const out: Record<string, unknown> = { ...(config as Record<string, unknown>) };
-  for (const k of Object.keys(out)) {
-    if (SECRET_KEYS.has(k)) out[k] = maskValue(out[k]);
-  }
-  return out;
-}
-
-function maskBot<T extends { config: unknown }>(bot: T): T {
-  return { ...bot, config: maskConfig(bot.config) };
+function maskBot<T extends BotWithTemplate>(bot: T): T {
+  return { ...bot, config: maskBotConfig(bot.template, bot.config) };
 }
 
 const Create = z.object({
@@ -48,16 +37,17 @@ export async function botRoutes(app: FastifyInstance) {
         error: { code: 'invalid_template', message: `templateId ${body.templateId} not found` },
       });
     }
-    // TODO(phase-2): validate body.config against template.configSchema (JSON Schema)
+    const encryptedConfig = encryptBotConfig(template, body.config);
     const bot = await prisma.bot.create({
       data: {
         templateId: body.templateId,
         name: body.name,
-        config: body.config as Prisma.InputJsonValue,
+        config: encryptedConfig as Prisma.InputJsonValue,
         enabled: body.enabled ?? true,
       },
+      include: { template: true },
     });
-    return reply.code(201).send(bot);
+    return reply.code(201).send(maskBot(bot));
   });
 
   app.get('/api/bots', { preHandler: requireAuth('api') }, async () => {
@@ -87,14 +77,31 @@ export async function botRoutes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>(
     '/api/bots/:id',
     { preHandler: requireAuth('api') },
-    async (req) => {
+    async (req, reply) => {
       const body = Patch.parse(req.body);
       const data: Prisma.BotUpdateInput = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
-        ...(body.config !== undefined ? { config: body.config as Prisma.InputJsonValue } : {}),
       };
-      return prisma.bot.update({ where: { id: req.params.id }, data });
+      if (body.config !== undefined) {
+        const existing = await prisma.bot.findUnique({
+          where: { id: req.params.id },
+          include: { template: true },
+        });
+        if (!existing) {
+          return reply.code(404).send({ error: { code: 'not_found', message: 'bot not found' } });
+        }
+        // Merge new fields over existing config so the UI can submit a partial
+        // patch without losing already-encrypted secrets it never saw.
+        const merged = { ...(existing.config as Record<string, unknown>), ...body.config };
+        data.config = encryptBotConfig(existing.template, merged) as Prisma.InputJsonValue;
+      }
+      const updated = await prisma.bot.update({
+        where: { id: req.params.id },
+        data,
+        include: { template: true },
+      });
+      return maskBot(updated);
     },
   );
 

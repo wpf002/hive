@@ -3,3 +3,4 @@ packages:
   - 'packages/*'
   - 'workers/ai_agent'
   - 'workers/trading'
+  - 'workers/mcp_host'

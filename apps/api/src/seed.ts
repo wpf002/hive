@@ -154,18 +154,16 @@ const TEMPLATES: SeedTemplate[] = [
     defaultConfig: { label: 'hive', payload: {} },
   },
   // ============ Discord (Phase 3a) ============
-  // Note: botToken is stored plaintext in config in dev. Phase 4 will encrypt
-  // secrets at rest with libsodium or pgcrypto.
   {
     name: 'Discord Channel Poster',
-    description: 'Post a message (optionally with embed + mentions) to a Discord channel. Bot must be in the guild with Send Messages perm. Token is stored plaintext in dev — Phase 4 will encrypt secrets at rest.',
+    description: 'Post a message (optionally with embed + mentions) to a Discord channel. Bot must be in the guild with Send Messages perm. Token is encrypted at rest (Phase 4a) via HIVE_SECRETS_KEY.',
     poolType: 'discord',
     configSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['botToken', 'channelId', 'content'],
       properties: {
-        botToken: { type: 'string', format: 'password', description: 'Discord bot token (secret)' },
+        botToken: { type: 'string', format: 'password', 'x-secret': true, description: 'Discord bot token (encrypted at rest)' },
         channelId: { type: 'string', description: 'Numeric channel ID' },
         content: { type: 'string', maxLength: 2000, description: 'Message body (markdown allowed)' },
         embed: {
@@ -195,14 +193,14 @@ const TEMPLATES: SeedTemplate[] = [
   },
   {
     name: 'Discord DM Sender',
-    description: 'Open a DM channel with a Discord user and send a message. User must share a guild with the bot. Token is stored plaintext in dev.',
+    description: 'Open a DM channel with a Discord user and send a message. User must share a guild with the bot. Token is encrypted at rest (Phase 4a).',
     poolType: 'discord',
     configSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['botToken', 'userId', 'content'],
       properties: {
-        botToken: { type: 'string', format: 'password' },
+        botToken: { type: 'string', format: 'password', 'x-secret': true },
         userId: { type: 'string', description: 'Numeric Discord user ID' },
         content: { type: 'string', maxLength: 2000 },
       },
@@ -218,7 +216,7 @@ const TEMPLATES: SeedTemplate[] = [
       additionalProperties: false,
       required: ['botToken', 'guildId', 'commandName', 'commandDescription', 'responseTemplate'],
       properties: {
-        botToken: { type: 'string', format: 'password' },
+        botToken: { type: 'string', format: 'password', 'x-secret': true },
         guildId: { type: 'string' },
         commandName: {
           type: 'string',
@@ -260,14 +258,14 @@ const TEMPLATES: SeedTemplate[] = [
   // ============ Telegram (Phase 3a) ============
   {
     name: 'Telegram Channel Poster',
-    description: 'Send a message to a Telegram channel or group. parseMode default MarkdownV2 — remember to escape MarkdownV2 reserved chars. Token is stored plaintext in dev.',
+    description: 'Send a message to a Telegram channel or group. parseMode default MarkdownV2 — remember to escape MarkdownV2 reserved chars. Token is encrypted at rest (Phase 4a).',
     poolType: 'telegram',
     configSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['botToken', 'chatId', 'content'],
       properties: {
-        botToken: { type: 'string', format: 'password' },
+        botToken: { type: 'string', format: 'password', 'x-secret': true },
         chatId: { type: 'string', description: 'Channel @handle or numeric chat ID' },
         content: { type: 'string', maxLength: 4096 },
         parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
@@ -286,7 +284,7 @@ const TEMPLATES: SeedTemplate[] = [
       additionalProperties: false,
       required: ['botToken', 'userId', 'content'],
       properties: {
-        botToken: { type: 'string', format: 'password' },
+        botToken: { type: 'string', format: 'password', 'x-secret': true },
         userId: { type: 'string', description: 'Numeric Telegram user ID' },
         content: { type: 'string', maxLength: 4096 },
         parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
@@ -318,8 +316,8 @@ const TEMPLATES: SeedTemplate[] = [
         side: { type: 'string', enum: ['buy', 'sell'] },
         amount: { type: 'number', exclusiveMinimum: 0 },
         mode: { type: 'string', enum: ['paper', 'live'], default: 'paper' },
-        apiKey: { type: 'string', format: 'password' },
-        apiSecret: { type: 'string', format: 'password' },
+        apiKey: { type: 'string', format: 'password', 'x-secret': true },
+        apiSecret: { type: 'string', format: 'password', 'x-secret': true },
         maxSlippagePct: { type: 'number', default: 1.0, description: 'Reject fill if price moved >x% from quote' },
       },
     },
@@ -336,8 +334,8 @@ const TEMPLATES: SeedTemplate[] = [
       properties: {
         exchange: { type: 'string', enum: ['binance', 'coinbase', 'kraken'] },
         mode: { type: 'string', enum: ['paper', 'live'], default: 'paper' },
-        apiKey: { type: 'string', format: 'password' },
-        apiSecret: { type: 'string', format: 'password' },
+        apiKey: { type: 'string', format: 'password', 'x-secret': true },
+        apiSecret: { type: 'string', format: 'password', 'x-secret': true },
         symbols: { type: 'array', items: { type: 'string' } },
         includeUsd: { type: 'boolean', default: true },
       },
@@ -365,6 +363,175 @@ const TEMPLATES: SeedTemplate[] = [
       },
     },
     defaultConfig: { exchanges: ['binance', 'kraken'], symbol: 'BTC/USDT', minSpreadPct: 0.5, durationSeconds: 60 },
+  },
+  // ============ mcp_host (Phase 4a) ============
+  {
+    name: 'Hive MCP Server',
+    description: 'Long-running: spins up an MCP server (SSE) on the assigned port, exposes the given exposedBots as MCP tools for durationSeconds. Each tool call invokes the underlying bot via /api/bots/:id/run. See /docs/MCP.md.',
+    poolType: 'mcp_host',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['exposedBots'],
+      properties: {
+        durationSeconds: { type: 'integer', minimum: 1, maximum: 86400, default: 3600 },
+        port: { type: 'integer', minimum: 0, maximum: 65535, default: 0, description: '0 = auto-assign' },
+        exposedBots: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string', description: 'Bot ID' },
+        },
+        transportMode: { type: 'string', enum: ['sse', 'stdio'], default: 'sse' },
+        authToken: { type: 'string', format: 'password', 'x-secret': true, description: 'If set, clients must pass this as Bearer or ?token=' },
+      },
+    },
+    defaultConfig: { durationSeconds: 600, port: 0, exposedBots: [], transportMode: 'sse' },
+  },
+  {
+    name: 'MCP Tool Tester',
+    description: 'Short job: connects to an MCP server, calls one tool with the given args, returns the result. Useful for verifying a Hive MCP Server without firing up Claude Desktop.',
+    poolType: 'mcp_host',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['mcpServerUrl', 'toolName', 'toolArgs'],
+      properties: {
+        mcpServerUrl: { type: 'string', format: 'uri', description: 'e.g. http://localhost:4200/sse' },
+        authToken: { type: 'string', format: 'password', 'x-secret': true },
+        toolName: { type: 'string' },
+        toolArgs: { type: 'object', additionalProperties: true },
+      },
+    },
+    defaultConfig: { mcpServerUrl: 'http://localhost:4200/sse', toolName: 'cron_heartbeat', toolArgs: { label: 'mcp-test' } },
+  },
+  {
+    name: 'MCP Server Health Check',
+    description: 'Connects to an MCP server, calls list_tools, returns names + latency + whether all expectedTools (if any) are present.',
+    poolType: 'mcp_host',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['mcpServerUrl'],
+      properties: {
+        mcpServerUrl: { type: 'string', format: 'uri' },
+        authToken: { type: 'string', format: 'password', 'x-secret': true },
+        expectedTools: { type: 'array', items: { type: 'string' }, default: [] },
+      },
+    },
+    defaultConfig: { mcpServerUrl: 'http://localhost:4200/sse', expectedTools: [] },
+  },
+  // ============ ci_agent (Phase 4a) ============
+  {
+    name: 'GitHub Repo Test Runner',
+    description: 'Clone a Git repo inside a container and run a test command. Streams stdout/stderr to joblog; returns exit code and last 50 lines. Requires Docker daemon access on the worker host.',
+    poolType: 'ci_agent',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['repoUrl', 'testCommand'],
+      properties: {
+        repoUrl: { type: 'string', format: 'uri', description: 'https Git clone URL' },
+        ref: { type: 'string', default: 'main' },
+        githubToken: { type: 'string', format: 'password', 'x-secret': true, description: 'Personal access token for private repos' },
+        testCommand: { type: 'string', description: "e.g. 'pnpm test', 'pytest', 'go test ./...'" },
+        dockerImage: { type: 'string', default: 'node:20' },
+        timeoutSeconds: { type: 'integer', minimum: 1, maximum: 7200, default: 600 },
+        envVars: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    },
+    defaultConfig: { repoUrl: 'https://github.com/sindresorhus/awesome', ref: 'main', testCommand: 'ls -la', dockerImage: 'ubuntu:24.04', timeoutSeconds: 120 },
+  },
+  {
+    name: 'Docker Image Builder',
+    description: 'Clone a repo, docker build an image, optionally push to a registry. Returns image id + size + duration.',
+    poolType: 'ci_agent',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['repoUrl', 'imageTag'],
+      properties: {
+        repoUrl: { type: 'string', format: 'uri' },
+        ref: { type: 'string', default: 'main' },
+        githubToken: { type: 'string', format: 'password', 'x-secret': true },
+        dockerfilePath: { type: 'string', default: 'Dockerfile' },
+        buildContext: { type: 'string', default: '.' },
+        imageTag: { type: 'string', description: 'e.g. myapp:phase4' },
+        buildArgs: { type: 'object', additionalProperties: { type: 'string' } },
+        pushTo: { type: 'string', description: 'Registry URL — pushes after build if set' },
+        registryUsername: { type: 'string' },
+        registryPassword: { type: 'string', format: 'password', 'x-secret': true },
+      },
+    },
+    defaultConfig: { repoUrl: '', ref: 'main', dockerfilePath: 'Dockerfile', buildContext: '.', imageTag: 'hive-build:latest' },
+  },
+  {
+    name: 'Shell Command Runner',
+    description: 'Minimal "run this command in a container" template. Useful for ad-hoc tasks.',
+    poolType: 'ci_agent',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['command'],
+      properties: {
+        command: { type: 'string', description: 'Single command line — runs under sh -c' },
+        dockerImage: { type: 'string', default: 'ubuntu:24.04' },
+        timeoutSeconds: { type: 'integer', minimum: 1, maximum: 3600, default: 300 },
+        envVars: { type: 'object', additionalProperties: { type: 'string' } },
+        workingDir: { type: 'string', default: '/workspace' },
+      },
+    },
+    defaultConfig: { command: "echo 'hello from hive'", dockerImage: 'ubuntu:24.04', timeoutSeconds: 60, workingDir: '/workspace' },
+  },
+  // ============ task_runner (Phase 4a) ============
+  {
+    name: 'Python Script Runner',
+    description: 'Write user-supplied Python source to a temp file, optionally create a venv with pipPackages, run with a timeout. Returns exit code + tailed stdout/stderr.',
+    poolType: 'task_runner',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['code'],
+      properties: {
+        code: { type: 'string', description: 'Python source' },
+        timeoutSeconds: { type: 'integer', minimum: 1, maximum: 600, default: 60 },
+        pythonVersion: { type: 'string', enum: ['3.11', '3.12'], default: '3.11' },
+        pipPackages: { type: 'array', items: { type: 'string' }, default: [] },
+        stdin: { type: 'string', description: 'Sent to the script on stdin' },
+        envVars: { type: 'object', additionalProperties: { type: 'string' } },
+      },
+    },
+    defaultConfig: { code: "print('hello from hive')\n", timeoutSeconds: 30, pythonVersion: '3.11', pipPackages: [] },
+  },
+  {
+    name: 'Shell Command Runner (Native)',
+    description: "Run a shell command on the HOST (no container). Faster than ci_agent's Docker version but with no isolation — treat any user-supplied command as RCE. See /docs/POOLS.md.",
+    poolType: 'task_runner',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['command'],
+      properties: {
+        command: { type: 'string' },
+        timeoutSeconds: { type: 'integer', minimum: 1, maximum: 600, default: 60 },
+        envVars: { type: 'object', additionalProperties: { type: 'string' } },
+        workingDir: { type: 'string' },
+      },
+    },
+    defaultConfig: { command: "echo 'hello from hive (native)'", timeoutSeconds: 30 },
+  },
+  {
+    name: 'Generic Webhook Receiver Echo',
+    description: 'Spins up an HTTP server on the assigned port for durationSeconds. Every received request is logged via joblog and counted. Useful for confirming another system actually POSTs.',
+    poolType: 'task_runner',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        durationSeconds: { type: 'integer', minimum: 1, maximum: 3600, default: 300 },
+        port: { type: 'integer', minimum: 0, maximum: 65535, default: 0, description: '0 = auto-assign' },
+      },
+    },
+    defaultConfig: { durationSeconds: 60, port: 0 },
   },
 ];
 

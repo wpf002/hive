@@ -8,6 +8,16 @@ dependencies = [
     "docker>=7.1.0",
 ]
 
+[project.scripts]
+hive-ci-agent = "hive_ci_agent.main:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hive_ci_agent*"]
+
+[tool.setuptools.package-dir]
+"" = "src"

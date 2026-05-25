@@ -4,6 +4,7 @@ import { prisma, Prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
 import { redis, STREAMS } from '../redis.js';
 import { writeAuditLog } from '../lib/audit.js';
+import { decryptBotConfig } from '../lib/secrets.js';
 
 const RunBody = z.object({
   overrideConfig: z.record(z.unknown()).optional(),
@@ -30,13 +31,25 @@ export async function jobRoutes(app: FastifyInstance) {
       if (!bot.enabled) {
         return reply.code(400).send({ error: { code: 'bot_disabled', message: 'bot is disabled' } });
       }
-      const config = { ...(bot.config as Record<string, unknown>), ...(body.overrideConfig ?? {}) };
+      // Decrypt any x-secret fields, then merge override values on top. Any
+      // secret supplied in the override is treated as cleartext (workers always
+      // see cleartext over the dispatch stream — encrypted dispatch payloads
+      // are Phase 5).
+      const decrypted = decryptBotConfig(bot.template, bot.config);
+      const config = { ...decrypted, ...(body.overrideConfig ?? {}) };
+      // Persisted payload preserves whatever the bot has stored; the cleartext
+      // copy lives only on the dispatch stream + in worker memory.
+      const storedPayload = { ...(bot.config as Record<string, unknown>), ...(body.overrideConfig ?? {}) };
       const job = await prisma.job.create({
         data: {
           botId: bot.id,
           status: 'queued',
           priority: body.priority ?? 0,
-          payload: { config, templateName: bot.template.name, pool: bot.template.poolType } as Prisma.InputJsonValue,
+          payload: {
+            config: storedPayload,
+            templateName: bot.template.name,
+            pool: bot.template.poolType,
+          } as Prisma.InputJsonValue,
         },
       });
       await redis.xadd(
@@ -139,7 +152,8 @@ export async function jobRoutes(app: FastifyInstance) {
       });
       // Requeue uses the bot's CURRENT config, not the job's original payload,
       // so a fix to the bot config takes effect on requeue.
-      const config = job.bot.config as Record<string, unknown>;
+      const decrypted = decryptBotConfig(job.bot.template, job.bot.config);
+      const storedConfig = job.bot.config as Record<string, unknown>;
       const updated = await prisma.job.update({
         where: { id: job.id },
         data: {
@@ -149,7 +163,11 @@ export async function jobRoutes(app: FastifyInstance) {
           result: Prisma.DbNull,
           startedAt: null,
           finishedAt: null,
-          payload: { config, templateName: job.bot.template.name, pool: job.bot.template.poolType } as Prisma.InputJsonValue,
+          payload: {
+            config: storedConfig,
+            templateName: job.bot.template.name,
+            pool: job.bot.template.poolType,
+          } as Prisma.InputJsonValue,
         },
       });
       await redis.xadd(
@@ -159,7 +177,7 @@ export async function jobRoutes(app: FastifyInstance) {
         'botId', job.botId,
         'pool', job.bot.template.poolType,
         'templateName', job.bot.template.name,
-        'config', JSON.stringify(config),
+        'config', JSON.stringify(decrypted),
         'priority', String(job.priority),
       );
       return updated;

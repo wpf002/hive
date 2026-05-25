@@ -11,6 +11,9 @@ procs:
   scheduler:
     shell: pnpm --filter @hive/scheduler dev
     autostart: true
+  session-sweeper:
+    shell: pnpm --filter @hive/session-sweeper dev
+    autostart: true
   scraper:
     shell: workers/scraper/.venv/bin/python -m hive_scraper.main
     autostart: true
@@ -28,4 +31,13 @@ procs:
     autostart: true
   trading:
     shell: pnpm --filter @hive/worker-trading dev
+    autostart: true
+  mcp_host:
+    shell: pnpm --filter @hive/worker-mcp-host dev
+    autostart: true
+  ci_agent:
+    shell: workers/ci_agent/.venv/bin/python -m hive_ci_agent.main
+    autostart: true
+  task_runner:
+    shell: workers/task_runner/.venv/bin/python -m hive_task_runner.main
     autostart: true

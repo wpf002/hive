@@ -8,11 +8,13 @@
     "build": "tsc",
     "start": "node --env-file=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx --env-file=../../.env src/seed.ts"
+    "seed": "tsx --env-file=../../.env src/seed.ts",
+    "encrypt-existing-secrets": "tsx --env-file=../../.env src/scripts/encrypt-existing-secrets.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.0",
     "@fastify/cors": "^9.0.0",
+    "@hive/crypto": "workspace:*",
     "@hive/db": "workspace:*",
     "@hive/shared": "workspace:*",
     "bcryptjs": "^2.4.3",
