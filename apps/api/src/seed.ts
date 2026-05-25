@@ -665,6 +665,98 @@ const TEMPLATES: SeedTemplate[] = [
       selectors: [{ name: 'title', selector: 'h1' }],
     },
   },
+  // ============ rpa_desktop (Phase 4c) ============
+  // The pool is SINGLETON — only one job runs at a time across the host.
+  // POST /api/bots/:id/run returns 429 pool_busy if another rpa_desktop job
+  // is already active. See /docs/POOLS.md.
+  {
+    name: 'Screen Region Capture',
+    description: 'Take a desktop screenshot (whole screen or cropped region), upload as PNG artifact, optionally run OCR. macOS needs Accessibility permission for the terminal that runs the worker.',
+    poolType: 'rpa_desktop',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        region: {
+          type: 'object',
+          required: ['x', 'y', 'width', 'height'],
+          properties: {
+            x: { type: 'integer' },
+            y: { type: 'integer' },
+            width: { type: 'integer', minimum: 1 },
+            height: { type: 'integer', minimum: 1 },
+          },
+        },
+        filename: { type: 'string', default: 'capture.png' },
+        ocr: { type: 'boolean', default: false, description: 'Requires tesseract binary on PATH (brew install tesseract).' },
+      },
+    },
+    defaultConfig: { filename: 'capture.png', ocr: false },
+  },
+  {
+    name: 'Window Macro Player',
+    description: 'Run a sequence of pyautogui actions (click/type/keypress/wait/hotkey/move). LOUDLY audits every action in joblog. Optional before/after screenshots; failOnUnchanged guards against missed clicks.',
+    poolType: 'rpa_desktop',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['steps'],
+      properties: {
+        steps: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['action'],
+            properties: {
+              action: { type: 'string', enum: ['click', 'type', 'keypress', 'wait', 'hotkey', 'move'] },
+              x: { type: 'integer' },
+              y: { type: 'integer' },
+              text: { type: 'string' },
+              key: { type: 'string' },
+              keys: { type: 'array', items: { type: 'string' } },
+              ms: { type: 'integer', minimum: 0 },
+            },
+          },
+        },
+        preCheck: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            screenshotBeforeAfter: { type: 'boolean', default: true },
+            failOnUnchanged: { type: 'boolean', default: false },
+          },
+        },
+        maxDurationSeconds: { type: 'integer', minimum: 1, maximum: 3600, default: 120 },
+      },
+    },
+    defaultConfig: { steps: [{ action: 'wait', ms: 500 }], preCheck: { screenshotBeforeAfter: true, failOnUnchanged: false }, maxDurationSeconds: 60 },
+  },
+  {
+    name: 'OCR Field Reader',
+    description: 'Screenshot a region, optionally preprocess (grayscale / threshold), run OCR, optionally regex-match. Useful for monitoring values in legacy apps without an API.',
+    poolType: 'rpa_desktop',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['region'],
+      properties: {
+        region: {
+          type: 'object',
+          required: ['x', 'y', 'width', 'height'],
+          properties: {
+            x: { type: 'integer' },
+            y: { type: 'integer' },
+            width: { type: 'integer', minimum: 1 },
+            height: { type: 'integer', minimum: 1 },
+          },
+        },
+        preProcess: { type: 'string', enum: ['none', 'grayscale', 'threshold'], default: 'none' },
+        expectedPattern: { type: 'string', description: 'Regex; if set, result.matched is true/false.' },
+      },
+    },
+    defaultConfig: { region: { x: 0, y: 0, width: 400, height: 200 }, preProcess: 'none' },
+  },
 ];
 
 async function upsertTemplate(t: SeedTemplate): Promise<void> {

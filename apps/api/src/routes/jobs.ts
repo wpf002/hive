@@ -31,6 +31,32 @@ export async function jobRoutes(app: FastifyInstance) {
       if (!bot.enabled) {
         return reply.code(400).send({ error: { code: 'bot_disabled', message: 'bot is disabled' } });
       }
+      // Phase 4c — singleton pools (rpa_desktop) refuse parallel dispatch.
+      // A worker advertises `metadata.singleton: true` in its heartbeat; if
+      // any such worker for this pool already has an active job, we 429 with
+      // a retry hint instead of queueing forever behind it.
+      const busyWorker = await prisma.worker.findFirst({
+        where: {
+          poolType: bot.template.poolType,
+          activeJobs: { gt: 0 },
+          status: { not: 'offline' },
+        },
+      });
+      if (
+        busyWorker &&
+        typeof busyWorker.metadata === 'object' &&
+        busyWorker.metadata !== null &&
+        (busyWorker.metadata as Record<string, unknown>).singleton === true
+      ) {
+        reply.header('Retry-After', '30');
+        return reply.code(429).send({
+          error: {
+            code: 'pool_busy',
+            message: `pool '${bot.template.poolType}' is single-tenant and busy (worker ${busyWorker.id}); retry shortly`,
+            retryAfterMs: 30_000,
+          },
+        });
+      }
       // Decrypt any x-secret fields, then merge override values on top. Any
       // secret supplied in the override is treated as cleartext (workers always
       // see cleartext over the dispatch stream — encrypted dispatch payloads

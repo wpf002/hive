@@ -44,3 +44,6 @@ procs:
   browser:
     shell: workers/browser/.venv/bin/python -m hive_browser.main
     autostart: true
+  rpa_desktop:
+    shell: workers/rpa_desktop/.venv/bin/python -m hive_rpa_desktop.main
+    autostart: false  # singleton + needs Accessibility permission — start manually

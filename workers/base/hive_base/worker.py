@@ -32,6 +32,10 @@ class HiveWorker(ABC):
     pool_type: str = ""
     capacity: int = 4
     max_attempts: int = 3
+    # Phase 4c — pools that share a single hardware resource (mouse/keyboard,
+    # GPU, etc.) set this True. The API rejects parallel dispatch with 429 when
+    # any worker in the pool is singleton + busy.
+    singleton: bool = False
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or load_settings()
@@ -256,6 +260,7 @@ class HiveWorker(ABC):
             auth_token=self.settings.WORKER_AUTH_TOKEN,
             get_active_jobs=lambda: self._active_jobs,
             get_status=lambda: self._status,
+            extra_metadata={"singleton": True} if self.singleton else None,
         )
         self._heartbeat.start()
 
