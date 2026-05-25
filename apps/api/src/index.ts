@@ -14,6 +14,7 @@ import { scheduleRoutes } from './routes/schedules.js';
 import { aiRoutes } from './routes/ai.js';
 import { tradingRoutes } from './routes/trading.js';
 import { authRoutes } from './routes/auth.js';
+import { artifactRoutes } from './routes/artifacts.js';
 
 const app = Fastify({ logger: loggerOptions });
 
@@ -23,6 +24,15 @@ app.register(cors, {
   credentials: true,
 });
 app.register(cookie);
+
+// Workers POST raw image/PNG, etc. bodies to /api/jobs/:id/artifacts. Fastify's
+// default parser only knows JSON + urlencoded; we register a binary parser so
+// the route receives a Buffer.
+app.addContentTypeParser(
+  ['application/octet-stream', 'image/png', 'image/jpeg', 'application/zip', 'text/html'],
+  { parseAs: 'buffer' },
+  (_req, body, done) => done(null, body),
+);
 
 registerErrorHandler(app);
 registerHealth(app);
@@ -35,6 +45,7 @@ app.register(sseRoutes);
 app.register(scheduleRoutes);
 app.register(aiRoutes);
 app.register(tradingRoutes);
+app.register(artifactRoutes);
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

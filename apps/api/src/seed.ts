@@ -533,6 +533,138 @@ const TEMPLATES: SeedTemplate[] = [
     },
     defaultConfig: { durationSeconds: 60, port: 0 },
   },
+  // ============ browser (Phase 4b) ============
+  {
+    name: 'Full Page Screenshot',
+    description: 'Headless Chromium screenshot of a URL. Uploads PNG as an artifact and returns artifactId + page title.',
+    poolType: 'browser',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['url'],
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        viewportWidth: { type: 'integer', minimum: 320, default: 1440 },
+        viewportHeight: { type: 'integer', minimum: 240, default: 900 },
+        fullPage: { type: 'boolean', default: true },
+        waitForSelector: { type: 'string' },
+        waitMs: { type: 'integer', minimum: 0, default: 0 },
+        userAgent: { type: 'string' },
+      },
+    },
+    defaultConfig: { url: 'https://example.com', viewportWidth: 1440, viewportHeight: 900, fullPage: true, waitMs: 0 },
+  },
+  {
+    name: 'Headless Form Filler',
+    description: 'Sequence of fill/click/select/wait steps. On success captures per `capture` setting; on any step failure ALWAYS captures failure.png + failure.html.',
+    poolType: 'browser',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['url', 'steps'],
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        steps: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['action'],
+            properties: {
+              selector: { type: 'string' },
+              action: { type: 'string', enum: ['fill', 'click', 'select', 'wait'] },
+              value: { type: 'string' },
+              waitMs: { type: 'integer', minimum: 0 },
+            },
+          },
+        },
+        finalSelectorWait: { type: 'string' },
+        capture: { type: 'string', enum: ['screenshot', 'html', 'both', 'none'], default: 'screenshot' },
+        timeoutSeconds: { type: 'integer', minimum: 1, maximum: 600, default: 30 },
+      },
+    },
+    defaultConfig: {
+      url: 'https://httpbin.org/forms/post',
+      steps: [
+        { selector: 'input[name="custname"]', action: 'fill', value: 'hive' },
+        { selector: 'input[type="submit"]', action: 'click' },
+      ],
+      capture: 'screenshot',
+      timeoutSeconds: 30,
+    },
+  },
+  {
+    name: 'E2E Test Runner',
+    description: 'Load URL, run a list of assertions (expectVisible / expectText / expectAttribute). Job succeeds even when failed>0 — failures are data, not infra errors.',
+    poolType: 'browser',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['url', 'assertions'],
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        assertions: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['selector'],
+            properties: {
+              selector: { type: 'string' },
+              expectVisible: { type: 'boolean' },
+              expectText: { type: 'string' },
+              expectAttribute: {
+                type: 'object',
+                required: ['name', 'value'],
+                properties: { name: { type: 'string' }, value: { type: 'string' } },
+              },
+            },
+          },
+        },
+        viewportWidth: { type: 'integer', default: 1440 },
+        viewportHeight: { type: 'integer', default: 900 },
+        captureOnFailure: { type: 'boolean', default: true },
+      },
+    },
+    defaultConfig: {
+      url: 'https://example.com',
+      assertions: [{ selector: 'h1', expectText: 'Example Domain' }],
+      captureOnFailure: true,
+    },
+  },
+  {
+    name: 'Web Element Extractor',
+    description: 'JS-rendered scraping: load URL, return extracted values from a selectors map. attr defaults to textContent; multiple returns an array.',
+    poolType: 'browser',
+    configSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['url', 'selectors'],
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        selectors: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['name', 'selector'],
+            properties: {
+              name: { type: 'string' },
+              selector: { type: 'string' },
+              attr: { type: 'string' },
+              multiple: { type: 'boolean', default: false },
+            },
+          },
+        },
+        waitForSelector: { type: 'string' },
+        userAgent: { type: 'string' },
+      },
+    },
+    defaultConfig: {
+      url: 'https://example.com',
+      selectors: [{ name: 'title', selector: 'h1' }],
+    },
+  },
 ];
 
 async function upsertTemplate(t: SeedTemplate): Promise<void> {

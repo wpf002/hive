@@ -185,6 +185,20 @@ model Session {
   @@index([expiresAt])
 }
 
+// ============ Artifacts (Phase 4b) ============
+
+model Artifact {
+  id          String   @id @default(cuid())
+  jobId       String
+  filename    String
+  contentType String
+  sizeBytes   Int
+  path        String
+  createdAt   DateTime @default(now())
+
+  @@index([jobId, createdAt])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?

@@ -9,6 +9,15 @@ import { LiveLogStream } from '@/components/LiveLogStream';
 import { fmtDateTime, fmtDuration, fmtJobShort } from '@/lib/format';
 import type { Job } from '@/lib/types';
 
+interface ArtifactSummary {
+  id: string;
+  jobId: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 
 export default function JobDetailPage() {
@@ -18,6 +27,13 @@ export default function JobDetailPage() {
     queryKey: ['job', id],
     queryFn: () => api.get<Job>(`/api/jobs/${id}`),
     refetchInterval: (q) => (q.state.data && TERMINAL.has(q.state.data.status) ? false : 3_000),
+  });
+  const artifacts = useQuery<ArtifactSummary[]>({
+    queryKey: ['job-artifacts', id],
+    queryFn: () => api.get<ArtifactSummary[]>(`/api/jobs/${id}/artifacts`),
+    // Poll while the job is still running so new uploads appear without a hard refresh.
+    refetchInterval: () => (job.data && TERMINAL.has(job.data.status) ? false : 5_000),
+    enabled: !!job.data,
   });
 
   async function cancel() {
@@ -91,6 +107,17 @@ export default function JobDetailPage() {
         <LiveLogStream jobId={j.id} />
       </section>
 
+      {artifacts.data && artifacts.data.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="font-semibold">Artifacts</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {artifacts.data.map((a) => (
+              <ArtifactCard key={a.id} artifact={a} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="grid gap-4 lg:grid-cols-2">
         <Panel title="Result">
           {j.result !== null ? (
@@ -146,6 +173,53 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
     <div className="rounded-lg border border-hive-border bg-hive-surface">
       <div className="border-b border-hive-border px-4 py-2 font-semibold">{title}</div>
       <div className="p-3">{children}</div>
+    </div>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
+  const base = (process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000').replace(/\/$/, '');
+  // Artifact GET is cookie-auth'd by the API, but <img>/<a> on the same origin
+  // automatically include the cookie thanks to credentials:include CORS config.
+  const href = `${base}/api/artifacts/${artifact.id}`;
+  const isImage = artifact.contentType?.startsWith('image/');
+  return (
+    <div className="rounded-lg border border-hive-border bg-hive-surface">
+      <div className="border-b border-hive-border px-3 py-2">
+        <div className="truncate font-mono text-xs">{artifact.filename}</div>
+        <div className="mt-0.5 flex justify-between text-[10px] text-hive-subtle">
+          <span>{artifact.contentType}</span>
+          <span>{formatBytes(artifact.sizeBytes)}</span>
+        </div>
+      </div>
+      <div className="p-2">
+        {isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <a href={href} target="_blank" rel="noreferrer">
+            <img
+              src={href}
+              alt={artifact.filename}
+              className="max-h-48 w-full rounded border border-hive-border object-contain bg-black/40"
+            />
+          </a>
+        ) : (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block rounded border border-honey-500/30 px-3 py-1 text-xs text-honey-500 hover:bg-honey-500/10"
+          >
+            Download
+          </a>
+        )}
+      </div>
     </div>
   );
 }

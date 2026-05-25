@@ -14,6 +14,8 @@ const Env = z.object({
   HIVE_SECRETS_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'HIVE_SECRETS_KEY must be 64 hex chars (32 bytes). Generate with `openssl rand -hex 32`.'),
+  // Phase 4b: where artifact files live on disk. S3 backend is Phase 5.
+  HIVE_ARTIFACT_DIR: z.string().min(1).default('./data/artifacts'),
 });
 
 export const env = Env.parse(process.env);

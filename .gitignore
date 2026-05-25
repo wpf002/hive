@@ -43,3 +43,6 @@ infra/docker/data/
 # Worker artifacts
 workers/**/screenshots/
 workers/**/downloads/
+
+# Phase 4b — artifact storage (local filesystem)
+data/artifacts/
