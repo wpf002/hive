@@ -69,10 +69,14 @@ export default function AiConsolePage() {
   const [userPrompt, setUserPrompt] = useState('What is the capital of France?');
   const [selected, setSelected] = useState<Set<Provider>>(new Set(['claude']));
   const [models, setModels] = useState<Record<Provider, string>>(DEFAULT_MODELS);
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(1024);
+  // Locked defaults — exposing these as user-facing knobs added clutter without
+  // value for the ad-hoc prompt use case the AI Console serves. If a power user
+  // ever needs to tune them, build a dedicated bot in the Bots page where the
+  // full template schema is editable.
+  const TEMPERATURE = 0.7;
+  const MAX_TOKENS = 1024;
+  const STREAM_SINGLE = true;
   const [verdictMode, setVerdictMode] = useState<VerdictMode>('consensus');
-  const [stream, setStream] = useState(true);
   const [jobId, setJobId] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -132,8 +136,8 @@ export default function AiConsolePage() {
           providers,
           systemPrompt: systemPrompt || undefined,
           userPrompt,
-          maxTokens,
-          temperature,
+          maxTokens: MAX_TOKENS,
+          temperature: TEMPERATURE,
           verdictMode,
         }
       : {
@@ -141,9 +145,9 @@ export default function AiConsolePage() {
           model: models[providers[0]],
           systemPrompt: systemPrompt || undefined,
           userPrompt,
-          maxTokens,
-          temperature,
-          stream,
+          maxTokens: MAX_TOKENS,
+          temperature: TEMPERATURE,
+          stream: STREAM_SINGLE,
         };
 
     // Reuse one stable AI Console bot per template instead of creating a new
@@ -180,8 +184,8 @@ export default function AiConsolePage() {
       setSystemPrompt(cfg.systemPrompt);
       setSystemOpen(true);
     }
-    if (typeof cfg.temperature === 'number') setTemperature(cfg.temperature);
-    if (typeof cfg.maxTokens === 'number') setMaxTokens(cfg.maxTokens);
+    // temperature / maxTokens / stream are intentionally not restored —
+    // the AI Console no longer exposes them, so silently dropping is fine.
     if (typeof cfg.provider === 'string') setSelected(new Set([cfg.provider as Provider]));
     if (Array.isArray(cfg.providers)) setSelected(new Set(cfg.providers as Provider[]));
     if (typeof cfg.verdictMode === 'string') setVerdictMode(cfg.verdictMode as VerdictMode);
@@ -286,38 +290,9 @@ export default function AiConsolePage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="font-mono text-[11px] uppercase text-hive-subtle">Temperature · {temperature.toFixed(2)}</span>
-              <input
-                type="range" min={0} max={2} step={0.05} value={temperature}
-                onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                className="mt-1 w-full"
-              />
-            </label>
-            <label className="block">
-              <span className="font-mono text-[11px] uppercase text-hive-subtle">Max tokens</span>
-              <input
-                type="number" min={1} value={maxTokens}
-                onChange={(e) => setMaxTokens(Math.max(1, parseInt(e.target.value || '0', 10)))}
-                className="mt-1 w-full rounded border border-hive-border bg-hive-bg px-2 py-1 font-mono text-xs"
-              />
-            </label>
-          </div>
-
-          <label className={cn(
-            'flex items-center gap-2 font-mono text-[11px] uppercase text-hive-subtle',
-            isMulti && 'opacity-40 cursor-not-allowed',
-          )}>
-            <input
-              type="checkbox"
-              checked={!isMulti && stream}
-              disabled={isMulti}
-              onChange={(e) => setStream(e.target.checked)}
-              className="accent-honey-500"
-            />
-            Stream response {isMulti && '(single-call only)'}
-          </label>
+          {/* Temperature, Max tokens, and Stream are hardcoded to sensible defaults
+              (0.7 / 1024 / always-on for single-call). Most users don't need to tune
+              these for ad-hoc questions, and the controls were just noise. */}
 
           {runError && <div className="font-mono text-xs text-red-400">{runError}</div>}
 
