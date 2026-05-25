@@ -34,14 +34,14 @@ export default function BotsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-3">
         <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
           <h1 className="text-2xl font-bold">Bots</h1>
           <p className="mt-1 font-mono text-xs text-hive-subtle">INSTANTIATED TEMPLATES</p>
         </div>
         <button
           onClick={() => setCreateOpen(true)}
-          className="rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
+          className="shrink-0 rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
         >
           + New Bot
         </button>

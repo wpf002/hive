@@ -146,15 +146,24 @@ export default function AiConsolePage() {
           stream,
         };
 
+    // Reuse one stable AI Console bot per template instead of creating a new
+    // bot per click. Run-time settings are passed as overrideConfig (the API
+    // merges them over the bot's stored config on /api/bots/:id/run).
+    const stableName = isMulti ? 'AI Console (Multi)' : 'AI Console (Single)';
+
     setRunning(true);
     try {
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const bot = await api.post<Bot>('/api/bots', {
-        templateId: template.id,
-        name: `AI Console — ${stamp}`,
-        config,
-      });
-      const created = await api.post<Job>(`/api/bots/${bot.id}/run`, {});
+      const allBots = await api.get<Bot[]>('/api/bots');
+      let bot = allBots.find((b) => b.name === stableName);
+      if (!bot) {
+        bot = await api.post<Bot>('/api/bots', {
+          templateId: template.id,
+          name: stableName,
+          config: {},
+        });
+        await qc.invalidateQueries({ queryKey: ['bots'] });
+      }
+      const created = await api.post<Job>(`/api/bots/${bot.id}/run`, { overrideConfig: config });
       setJobId(created.id);
       await qc.invalidateQueries({ queryKey: ['ai', 'recent'] });
     } catch (e) {
@@ -209,11 +218,9 @@ export default function AiConsolePage() {
             )}
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-col">
             <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">User prompt</div>
-            <div className="min-h-0 flex-1">
-              <PromptEditor value={userPrompt} onChange={setUserPrompt} height={300} />
-            </div>
+            <PromptEditor value={userPrompt} onChange={setUserPrompt} height={220} />
           </div>
 
           <div>

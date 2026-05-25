@@ -44,5 +44,8 @@ infra/docker/data/
 workers/**/screenshots/
 workers/**/downloads/
 
-# Phase 4b — artifact storage (local filesystem)
+# Phase 4b — artifact storage (local filesystem; honors HIVE_ARTIFACT_DIR
+# but defaults to a cwd-relative ./data/artifacts, which lands inside whichever
+# service started — most often apps/api/data/artifacts. Glob catches both).
+**/data/artifacts/
 data/artifacts/

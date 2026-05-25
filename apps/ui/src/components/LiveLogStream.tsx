@@ -54,8 +54,13 @@ export function LiveLogStream({ jobId }: { jobId: string }) {
     const ctrl = new AbortController();
     (async () => {
       try {
+        // Prefer session cookies (Phase 3c+). Fall back to NEXT_PUBLIC_API_TOKEN
+        // only when present — that's the path for fresh installs before login.
+        const headers: Record<string, string> = { Accept: 'text/event-stream' };
+        if (api.token) headers.Authorization = `Bearer ${api.token}`;
         const res = await fetch(streamUrl(jobId), {
-          headers: { Authorization: `Bearer ${api.token}`, Accept: 'text/event-stream' },
+          headers,
+          credentials: 'include',
           signal: ctrl.signal,
         });
         if (!res.ok || !res.body) {

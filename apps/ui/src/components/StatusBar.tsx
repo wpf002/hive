@@ -4,9 +4,9 @@ import { api } from '@/lib/api';
 import type { HealthCheck, Worker, Job } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
-function Pill({ label, ok, value }: { label: string; ok?: boolean; value?: string | number }) {
+function Pill({ label, ok, value, title }: { label: string; ok?: boolean; value?: string | number; title?: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-hive-border bg-hive-surface px-2 py-0.5 text-[11px] font-mono">
+    <span title={title} className="inline-flex items-center gap-1 rounded border border-hive-border bg-hive-surface px-2 py-0.5 text-[11px] font-mono">
       {ok !== undefined && (
         <span className={cn('inline-block h-1.5 w-1.5 rounded-full', ok ? 'bg-emerald-400' : 'bg-red-500')} />
       )}
@@ -38,8 +38,15 @@ export function StatusBar() {
     refetchInterval: 3_000,
   });
 
-  const onlineWorkers = workers.data?.filter((w) => w.status === 'online').length ?? 0;
-  const totalWorkers = workers.data?.length ?? 0;
+  // "Active" = anything other than offline. Past-session worker rows hang around
+  // as 'offline' forever (new run = new worker id), so showing them in the
+  // denominator gives a useless ever-growing total.
+  const allWorkers = workers.data ?? [];
+  const onlineWorkers = allWorkers.filter((w) => w.status === 'online').length;
+  const drainingWorkers = allWorkers.filter((w) => w.status === 'draining').length;
+  const activeWorkers = onlineWorkers + drainingWorkers;
+  const offlineWorkers = allWorkers.length - activeWorkers;
+  const workersTitle = `${onlineWorkers} online · ${drainingWorkers} draining · ${offlineWorkers} offline (stale rows from prior sessions)`;
   const apiOk = !health.isError;
   const pgOk = health.data?.checks?.postgres?.ok;
   const redisOk = health.data?.checks?.redis?.ok;
@@ -50,7 +57,7 @@ export function StatusBar() {
       <Pill label="PG"    ok={!!pgOk} />
       <Pill label="Redis" ok={!!redisOk} />
       <div className="mx-1 h-4 w-px bg-hive-border" />
-      <Pill label="Workers" value={`${onlineWorkers}/${totalWorkers}`} />
+      <Pill label="Workers" value={`${onlineWorkers}/${activeWorkers}`} title={workersTitle} />
       <Pill label="Queued"  value={queued.data?.length ?? 0} />
       <Pill label="Running" value={running.data?.length ?? 0} />
       <div className="flex-1" />

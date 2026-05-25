@@ -36,8 +36,11 @@ export function StreamingResponse({ jobId }: Props) {
     const ctrl = new AbortController();
     (async () => {
       try {
+        const headers: Record<string, string> = { Accept: 'text/event-stream' };
+        if (api.token) headers.Authorization = `Bearer ${api.token}`;
         const res = await fetch(streamUrl(jobId), {
-          headers: { Authorization: `Bearer ${api.token}`, Accept: 'text/event-stream' },
+          headers,
+          credentials: 'include',
           signal: ctrl.signal,
         });
         if (!res.ok || !res.body) return;

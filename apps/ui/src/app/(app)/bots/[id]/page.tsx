@@ -7,8 +7,11 @@ import { api } from '@/lib/api';
 import { PoolBadge } from '@/components/PoolBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { RunBotDialog } from '@/components/RunBotDialog';
+import { SchemaForm, pruneUndefined } from '@/components/SchemaForm';
 import { fmtRelative } from '@/lib/format';
 import type { Bot, Job } from '@/lib/types';
+
+type EditMode = 'form' | 'json';
 
 export default function BotDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,22 +23,35 @@ export default function BotDetailPage() {
     refetchInterval: 8_000,
   });
   const [name, setName] = useState('');
+  const [configValue, setConfigValue] = useState<Record<string, unknown>>({});
   const [configJson, setConfigJson] = useState('');
+  const [editMode, setEditMode] = useState<EditMode>('form');
   const [runOpen, setRunOpen] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (bot.data) {
       setName(bot.data.name);
-      setConfigJson(JSON.stringify(bot.data.config, null, 2));
+      const cfg = (bot.data.config ?? {}) as Record<string, unknown>;
+      setConfigValue(cfg);
+      setConfigJson(JSON.stringify(cfg, null, 2));
     }
   }, [bot.data]);
+
+  // Keep JSON view synced while editing in form mode.
+  useEffect(() => {
+    if (editMode === 'form') setConfigJson(JSON.stringify(pruneUndefined(configValue), null, 2));
+  }, [configValue, editMode]);
 
   async function save() {
     setSaveErr(null);
     let config: Record<string, unknown>;
-    try { config = JSON.parse(configJson); }
-    catch (e) { return setSaveErr(`Invalid JSON: ${(e as Error).message}`); }
+    if (editMode === 'json') {
+      try { config = JSON.parse(configJson); }
+      catch (e) { return setSaveErr(`Invalid JSON: ${(e as Error).message}`); }
+    } else {
+      config = (pruneUndefined(configValue) ?? {}) as Record<string, unknown>;
+    }
     try {
       await api.patch<Bot>(`/api/bots/${id}`, { name, config });
       await qc.invalidateQueries({ queryKey: ['bot', id] });
@@ -79,21 +95,60 @@ export default function BotDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-lg border border-hive-border bg-hive-surface p-4">
-          <h2 className="font-semibold">Edit</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Edit</h2>
+            <div className="flex items-center gap-1 rounded border border-hive-border p-0.5 text-[11px] font-mono uppercase">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditMode('form');
+                  try { setConfigValue(JSON.parse(configJson)); } catch { /* keep last */ }
+                }}
+                className={
+                  'px-2 py-0.5 rounded ' +
+                  (editMode === 'form' ? 'bg-honey-500/20 text-honey-500' : 'text-hive-subtle hover:text-hive-text')
+                }
+              >Form</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditMode('json');
+                  setConfigJson(JSON.stringify(pruneUndefined(configValue), null, 2));
+                }}
+                className={
+                  'px-2 py-0.5 rounded ' +
+                  (editMode === 'json' ? 'bg-honey-500/20 text-honey-500' : 'text-hive-subtle hover:text-hive-text')
+                }
+              >JSON</button>
+            </div>
+          </div>
           <label className="block">
             <span className="font-mono text-[11px] uppercase text-hive-subtle">Name</span>
             <input value={name} onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded border border-hive-border bg-hive-bg px-2 py-1.5 text-sm" />
+              className="mt-1 w-full rounded border border-hive-border bg-hive-bg px-2 py-1.5 text-sm focus:border-honey-500 focus:outline-none" />
           </label>
-          <label className="block">
-            <span className="font-mono text-[11px] uppercase text-hive-subtle">Config (JSON)</span>
-            <textarea
-              value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              rows={10}
-              className="mt-1 w-full rounded border border-hive-border bg-black/40 px-2 py-1.5 font-mono text-xs"
-            />
-          </label>
+          <div>
+            <div className="mb-1 font-mono text-[11px] uppercase text-hive-subtle">Config</div>
+            {editMode === 'form' && bot.data.template ? (
+              <div className="rounded border border-hive-border bg-hive-bg/30 p-3">
+                <SchemaForm
+                  schema={bot.data.template.configSchema}
+                  value={configValue}
+                  onChange={setConfigValue}
+                />
+              </div>
+            ) : (
+              <textarea
+                value={configJson}
+                onChange={(e) => setConfigJson(e.target.value)}
+                rows={10}
+                spellCheck={false}
+                aria-label="Bot config JSON"
+                title="Bot config (JSON)"
+                className="w-full rounded border border-hive-border bg-black/40 px-2 py-1.5 font-mono text-xs"
+              />
+            )}
+          </div>
           {saveErr && <div className="font-mono text-xs text-red-400">{saveErr}</div>}
           <button
             onClick={save}

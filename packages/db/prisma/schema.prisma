@@ -41,7 +41,7 @@ model Bot {
 model Job {
   id          String   @id @default(cuid())
   botId       String
-  bot         Bot      @relation(fields: [botId], references: [id])
+  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   status      String   // queued | running | succeeded | failed | cancelled
   priority    Int      @default(0)
   attempts    Int      @default(0)
@@ -74,7 +74,7 @@ model JobLog {
 model Schedule {
   id        String   @id @default(cuid())
   botId     String
-  bot       Bot      @relation(fields: [botId], references: [id])
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
   cron      String   // cron expression
   enabled   Boolean  @default(true)
   lastRunAt DateTime?
