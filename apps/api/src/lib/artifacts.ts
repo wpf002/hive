@@ -1,24 +1,32 @@
 /**
- * Local-filesystem artifact storage.
+ * Artifact storage glue. Routes call into here; the actual backend is a
+ * pluggable HiveStorageProvider (local FS or S3) wired up at boot via
+ * initStorage().
  *
- * Layout:  ${HIVE_ARTIFACT_DIR}/${jobId}/${filename}
- *
- * Phase 4b is filesystem-only; the abstraction is intentionally narrow so we
- * can swap in S3 in Phase 5 without touching the routes/UI.
+ * Key scheme: `${jobId}/${filename}` — provider-relative.
+ *   - Local: joined with HIVE_ARTIFACT_DIR at read time.
+ *   - S3:    used verbatim as the object key.
  */
-import { mkdir, writeFile, stat } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
-import { join, basename, resolve } from 'node:path';
+import { basename } from 'node:path';
 import { prisma } from '@hive/db';
+import {
+  LocalFsStorageProvider,
+  S3StorageProvider,
+  setStorageProvider,
+  getStorageProvider,
+  resolveStorageProviderName,
+  type HiveStorageProvider,
+} from '@hive/storage';
 import { env } from '../env.js';
 
 export interface SaveResult {
   artifactId: string;
-  path: string;
+  storageKey: string;
   size: number;
+  provider: 'local' | 's3';
 }
 
-/** Reject filenames that try to break out of the per-job directory.
+/** Reject filenames that try to break out of the per-job key prefix.
  * basename() strips '/'; we also forbid '..' to be defensive. */
 function safeFilename(input: string): string {
   const base = basename(input).trim();
@@ -28,9 +36,26 @@ function safeFilename(input: string): string {
   return base;
 }
 
-export function jobDirFor(jobId: string): string {
-  return join(env.HIVE_ARTIFACT_DIR, jobId);
+export function jobKeyPrefix(jobId: string): string {
+  return `${jobId}/`;
 }
+
+export function storageKeyFor(jobId: string, filename: string): string {
+  return `${jobId}/${safeFilename(filename)}`;
+}
+
+/** Boot the configured storage provider once at startup. */
+export async function initStorage(): Promise<HiveStorageProvider> {
+  const name = resolveStorageProviderName();
+  const provider: HiveStorageProvider =
+    name === 's3'
+      ? new S3StorageProvider()
+      : new LocalFsStorageProvider({ baseDir: env.HIVE_ARTIFACT_DIR });
+  setStorageProvider(provider);
+  return provider;
+}
+
+export { getStorageProvider };
 
 export async function saveArtifact(
   jobId: string,
@@ -38,24 +63,33 @@ export async function saveArtifact(
   buffer: Buffer,
   contentType: string,
 ): Promise<SaveResult> {
-  const safe = safeFilename(filename);
-  const dir = jobDirFor(jobId);
-  await mkdir(dir, { recursive: true });
-  const full = join(dir, safe);
-  await writeFile(full, buffer);
-  const s = await stat(full);
+  const storage = getStorageProvider();
+  const key = storageKeyFor(jobId, filename);
+  const put = await storage.put(key, buffer, contentType || 'application/octet-stream');
   const row = await prisma.artifact.create({
     data: {
       jobId,
-      filename: safe,
+      filename: safeFilename(filename),
       contentType: contentType || 'application/octet-stream',
-      sizeBytes: Number(s.size),
-      path: resolve(full),
+      sizeBytes: put.size,
+      storageKey: put.key,
+      storageProvider: storage.providerName,
     },
   });
-  return { artifactId: row.id, path: row.path, size: row.sizeBytes };
+  return {
+    artifactId: row.id,
+    storageKey: row.storageKey,
+    size: row.sizeBytes,
+    provider: storage.providerName,
+  };
 }
 
-export function openReadStream(absolutePath: string): NodeJS.ReadableStream {
-  return createReadStream(absolutePath);
+export async function openArtifactStream(storageKey: string) {
+  const storage = getStorageProvider();
+  return storage.getStream(storageKey);
+}
+
+export async function presignArtifactGet(storageKey: string, ttlSeconds: number) {
+  const storage = getStorageProvider();
+  return storage.presignGet(storageKey, ttlSeconds);
 }

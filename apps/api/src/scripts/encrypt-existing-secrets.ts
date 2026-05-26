@@ -15,8 +15,8 @@
  *   3) pnpm --filter @hive/api encrypt-existing-secrets
  */
 import { prisma, Prisma } from '@hive/db';
-import { decrypt, isEncrypted } from '@hive/crypto';
 import { collectSecretPaths, encryptBotConfig } from '../lib/secrets.js';
+import { decryptValue, isEnvelope } from '../lib/envelope.js';
 
 interface Counters {
   inspected: number;
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
         }
       }
       if (typeof cursor !== 'string' || cursor === '') continue;
-      if (isEncrypted(cursor)) {
+      if (isEnvelope(cursor)) {
         counters.alreadyEncrypted += 1;
       } else {
         needsWork = true;
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 
     if (!needsWork) continue;
 
-    const next = encryptBotConfig(bot.template, config);
+    const next = await encryptBotConfig(bot.template, config);
 
     // Sanity: decrypt every secret we just encrypted; fail loudly if any throws.
     for (const path of secretPaths) {
@@ -83,8 +83,8 @@ async function main(): Promise<void> {
           break;
         }
       }
-      if (typeof cursor === 'string' && isEncrypted(cursor)) {
-        decrypt(cursor); // throws on tamper
+      if (typeof cursor === 'string' && isEnvelope(cursor)) {
+        await decryptValue(cursor); // throws on tamper
       }
     }
 

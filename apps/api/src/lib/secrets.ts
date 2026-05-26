@@ -7,10 +7,12 @@
  *   • decrypts them just before XADD-ing to hive:dispatch  (decryptBotConfig)
  *   • masks them on outbound GETs                   (maskBotConfig)
  *
- * Workers receive plaintext over Redis (short-lived). Encrypting the dispatch
- * payload itself is Phase 5 work once we add KMS.
+ * Phase 5a: writes emit v2 envelopes (KMS-wrapped DEK). Reads transparently
+ * accept v1 ciphertext too so existing rows keep working. v1→v2 migration is
+ * a one-shot script (apps/api/src/scripts/upgrade-envelope-v1-to-v2.ts).
  */
-import { encrypt, decrypt, isEncrypted } from '@hive/crypto';
+import { PREFIX as PREFIX_V1 } from '@hive/crypto';
+import { encryptValue, decryptValue, isEnvelope, PREFIX_V2 } from './envelope.js';
 
 type Json = unknown;
 type JsonObj = Record<string, Json>;
@@ -71,36 +73,36 @@ function getAt(obj: JsonObj, path: string): { parent: JsonObj | null; key: strin
 
 /** Encrypt every x-secret field in `config` that isn't already encrypted.
  * Idempotent — re-running on an already-encrypted config is a no-op. */
-export function encryptBotConfig(template: Template, config: Json): JsonObj {
+export async function encryptBotConfig(template: Template, config: Json): Promise<JsonObj> {
   const out = structuredClone(asObject(config) ?? {}) as JsonObj;
   for (const path of collectSecretPaths(template.configSchema)) {
     const { parent, key } = getAt(out, path);
     if (!parent) continue;
     const v = parent[key];
     if (typeof v !== 'string' || v === '') continue;
-    if (isEncrypted(v)) continue;
-    parent[key] = encrypt(v);
+    if (isEnvelope(v)) continue;
+    parent[key] = await encryptValue(v);
   }
   return out;
 }
 
 /** Decrypt every x-secret field in `config`. Throws on tamper.
  * Non-encrypted strings pass through (legacy rows before the migration). */
-export function decryptBotConfig(template: Template, config: Json): JsonObj {
+export async function decryptBotConfig(template: Template, config: Json): Promise<JsonObj> {
   const out = structuredClone(asObject(config) ?? {}) as JsonObj;
   for (const path of collectSecretPaths(template.configSchema)) {
     const { parent, key } = getAt(out, path);
     if (!parent) continue;
     const v = parent[key];
     if (typeof v !== 'string') continue;
-    if (!isEncrypted(v)) continue;
-    parent[key] = decrypt(v);
+    if (!isEnvelope(v)) continue;
+    parent[key] = await decryptValue(v);
   }
   return out;
 }
 
 function maskOne(v: string): string {
-  if (v.startsWith('hive:enc:v1:')) return '****encrypted';
+  if (v.startsWith(PREFIX_V2) || v.startsWith(PREFIX_V1)) return '****encrypted';
   if (v.length === 0) return v;
   if (v.length <= 4) return '****';
   return '****' + v.slice(-4);

@@ -37,7 +37,7 @@ export async function botRoutes(app: FastifyInstance) {
         error: { code: 'invalid_template', message: `templateId ${body.templateId} not found` },
       });
     }
-    const encryptedConfig = encryptBotConfig(template, body.config);
+    const encryptedConfig = await encryptBotConfig(template, body.config);
     const bot = await prisma.bot.create({
       data: {
         templateId: body.templateId,
@@ -94,7 +94,7 @@ export async function botRoutes(app: FastifyInstance) {
         // Merge new fields over existing config so the UI can submit a partial
         // patch without losing already-encrypted secrets it never saw.
         const merged = { ...(existing.config as Record<string, unknown>), ...body.config };
-        data.config = encryptBotConfig(existing.template, merged) as Prisma.InputJsonValue;
+        data.config = (await encryptBotConfig(existing.template, merged)) as Prisma.InputJsonValue;
       }
       const updated = await prisma.bot.update({
         where: { id: req.params.id },

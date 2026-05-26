@@ -185,16 +185,34 @@ model Session {
   @@index([expiresAt])
 }
 
+// ============ KMS keys (Phase 5a) ============
+
+// Tracks every KEK that has wrapped DEKs in this database. Used by
+// `pnpm --filter @hive/api kms:rotate` to find which envelopes to re-wrap.
+model KmsKey {
+  id         String    @id @default(cuid())
+  keyId      String    @unique // provider-specific identifier (e.g., AWS KMS ARN, 'static:v1')
+  provider   String    // 'static' | 'aws'
+  status     String    // 'active' | 'retiring' | 'revoked'
+  createdAt  DateTime  @default(now())
+  retiredAt  DateTime?
+
+  @@index([status])
+}
+
 // ============ Artifacts (Phase 4b) ============
 
 model Artifact {
-  id          String   @id @default(cuid())
-  jobId       String
-  filename    String
-  contentType String
-  sizeBytes   Int
-  path        String
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  jobId           String
+  filename        String
+  contentType     String
+  sizeBytes       Int
+  // Provider-internal key (e.g., 'jobId/file.png'). Renamed from `path` in
+  // Phase 5a so the abstraction works for S3 as well as local FS.
+  storageKey      String
+  storageProvider String   @default("local") // 'local' | 's3'
+  createdAt       DateTime @default(now())
 
   @@index([jobId, createdAt])
 }

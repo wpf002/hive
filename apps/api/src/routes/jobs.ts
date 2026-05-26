@@ -61,7 +61,7 @@ export async function jobRoutes(app: FastifyInstance) {
       // secret supplied in the override is treated as cleartext (workers always
       // see cleartext over the dispatch stream — encrypted dispatch payloads
       // are Phase 5).
-      const decrypted = decryptBotConfig(bot.template, bot.config);
+      const decrypted = await decryptBotConfig(bot.template, bot.config);
       const config = { ...decrypted, ...(body.overrideConfig ?? {}) };
       // Persisted payload preserves whatever the bot has stored; the cleartext
       // copy lives only on the dispatch stream + in worker memory.
@@ -178,7 +178,7 @@ export async function jobRoutes(app: FastifyInstance) {
       });
       // Requeue uses the bot's CURRENT config, not the job's original payload,
       // so a fix to the bot config takes effect on requeue.
-      const decrypted = decryptBotConfig(job.bot.template, job.bot.config);
+      const decrypted = await decryptBotConfig(job.bot.template, job.bot.config);
       const storedConfig = job.bot.config as Record<string, unknown>;
       const updated = await prisma.job.update({
         where: { id: job.id },

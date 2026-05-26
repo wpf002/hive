@@ -1,4 +1,4 @@
-.PHONY: help install dev build clean docker-up docker-down db-migrate workers-install workers-dev rotate-secrets-key
+.PHONY: help install dev build clean docker-up docker-down db-migrate workers-install workers-dev rotate-secrets-key minio-init
 
 help:
 	@echo "Hive — Distributed bot orchestration"
@@ -49,9 +49,17 @@ clean:
 	find workers -type d -name .venv -exec rm -rf {} +
 
 rotate-secrets-key:
-	@echo "TODO Phase 5 — re-encrypt existing values under a new HIVE_SECRETS_KEY."
-	@echo "For now, rotating the key strands every encrypted Bot.config value."
-	@echo "If you really need to rotate today:"
-	@echo "  1. Decrypt every Bot.config offline with the OLD key (pgcli + tsx scratch script)."
-	@echo "  2. Set the NEW key in .env."
-	@echo "  3. Run \`pnpm --filter @hive/api encrypt-existing-secrets\` against the cleartext."
+	@echo "Phase 5a — online rotation via envelope encryption."
+	@echo "  1. Bring up the new KEK (set HIVE_SECRETS_KEY to the new value;"
+	@echo "     for static provider also set HIVE_KMS_STATIC_KEY_ID and put"
+	@echo "     HIVE_KMS_STATIC_RETIRED_KEYS='<oldKeyId>=<oldHex>' so the"
+	@echo "     sweep can still unwrap old DEKs)."
+	@echo "  2. pnpm --filter @hive/api kms:rotate"
+	@echo "     (For AWS: pnpm --filter @hive/api kms:rotate --new-key-id <new ARN>)"
+
+# Create the local MinIO bucket so S3-backed artifact dev mode works. Idempotent.
+minio-init:
+	@docker run --rm --network host \
+		-e MC_HOST_local=http://hive:hivehive@localhost:9000 \
+		minio/mc:latest mb --ignore-existing local/hive-artifacts
+	@echo "MinIO bucket 'hive-artifacts' is ready at http://localhost:9001"

@@ -10,14 +10,23 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=../../.env src/seed.ts",
     "encrypt-existing-secrets": "tsx --env-file=../../.env src/scripts/encrypt-existing-secrets.ts",
-    "smoke:sse": "tsx --env-file=../../.env src/scripts/smoke-sse.ts"
+    "upgrade-envelope-v1-to-v2": "tsx --env-file=../../.env src/scripts/upgrade-envelope-v1-to-v2.ts",
+    "kms:rotate": "tsx --env-file=../../.env src/scripts/kms-rotate.ts",
+    "migrate-artifacts-to-s3": "tsx --env-file=../../.env src/scripts/migrate-artifacts-to-s3.ts",
+    "smoke:sse": "tsx --env-file=../../.env src/scripts/smoke-sse.ts",
+    "smoke:phase5a": "tsx --env-file=../../.env src/scripts/smoke-phase5a.ts",
+    "smoke:kms-rotation": "tsx --env-file=../../.env src/scripts/smoke-kms-rotation.ts",
+    "smoke:upgrade-and-migrate": "tsx --env-file=../../.env src/scripts/smoke-upgrade-and-migrate.ts",
+    "smoke:migrate-to-s3": "tsx --env-file=../../.env src/scripts/smoke-migrate-to-s3.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.0",
     "@fastify/cors": "^9.0.0",
     "@hive/crypto": "workspace:*",
     "@hive/db": "workspace:*",
+    "@hive/kms": "workspace:*",
     "@hive/shared": "workspace:*",
+    "@hive/storage": "workspace:*",
     "bcryptjs": "^2.4.3",
     "cron-parser": "^4.9.0",
     "fastify": "^4.28.0",
@@ -25,6 +34,7 @@
     "ioredis": "^5.4.0",
     "pino": "^9.3.0",
     "pino-pretty": "^11.2.0",
+    "sodium-native": "^4.3.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {

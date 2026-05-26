@@ -15,6 +15,9 @@ import { aiRoutes } from './routes/ai.js';
 import { tradingRoutes } from './routes/trading.js';
 import { authRoutes } from './routes/auth.js';
 import { artifactRoutes } from './routes/artifacts.js';
+import { initStorage } from './lib/artifacts.js';
+
+await initStorage();
 
 const app = Fastify({ logger: loggerOptions });
 
