@@ -140,6 +140,7 @@ hive/
 - **Phase 3** — `trading` + `discord` + `telegram`. Real-time SSE everywhere.
 - **Phase 4** — `mcp_host` + `rpa_desktop` + `ci_agent` + `task_runner`.
 - **Phase 5** — Cloud deploy targets (Fly.io / Railway / AWS), horizontal scaling, multi-tenant.
+- **Phase 6** — Go live: provision a real cloud environment, set production secrets, deploy via `deploy/fly/deploy-all.sh` or `terraform apply`, run `scripts/smoke-cloud.sh`, point DNS. See [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## License
 
