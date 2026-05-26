@@ -41,12 +41,23 @@ export async function sseRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
     }
 
-    reply.raw.writeHead(200, {
+    // CORS: @fastify/cors hooks into onSend, but reply.raw.writeHead bypasses
+    // that pipeline entirely — so we need to echo the origin ourselves or the
+    // browser blocks the streaming response with "Failed to fetch" even though
+    // the OPTIONS preflight succeeded.
+    const headers: Record<string, string> = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
-    });
+    };
+    const origin = req.headers.origin;
+    if (origin) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+      headers['Vary'] = 'Origin';
+    }
+    reply.raw.writeHead(200, headers);
     // Tell Fastify we're streaming raw.
     reply.hijack();
 
