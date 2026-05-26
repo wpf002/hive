@@ -12,5 +12,10 @@ export {
   DLQ_STREAM,
   POOL_GROUP,
   poolStream,
+  poolStreamFor,
+  poolGroupFor,
+  workerEligibleStreams,
+  dispatchStreamFor,
+  POOL_STREAM_ANY,
   drainKey,
 } from './lifecycle.js';

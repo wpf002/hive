@@ -22,10 +22,29 @@ Handler = Callable[[dict[str, Any], JobLogger], Awaitable[Any]]
 
 
 DLQ_STREAM = "hive:dlq"
+ANY = "any"
 
 
 def drain_key(worker_id: str) -> str:
     return f"hive:worker:{worker_id}:drain"
+
+
+def pool_stream_for(pool: str, region: str, zone: str) -> str:
+    return f"hive:pool:{pool}:{region}:{zone}"
+
+
+def pool_group_for(pool: str, region: str, zone: str) -> str:
+    return f"hive:pool:{pool}:workers:{region}:{zone}"
+
+
+def worker_eligible_streams(pool: str, region: str, zone: str) -> list[tuple[str, str]]:
+    """Returns the (stream, group) pairs a worker in (region, zone) must consume."""
+    triples: list[tuple[str, str]] = [(ANY, ANY)]
+    if region != ANY:
+        triples.append((region, ANY))
+        if zone != ANY:
+            triples.append((region, zone))
+    return [(pool_stream_for(pool, r, z), pool_group_for(pool, r, z)) for r, z in triples]
 
 
 class HiveWorker(ABC):
@@ -39,7 +58,13 @@ class HiveWorker(ABC):
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or load_settings()
-        self.worker_id = f"{self.pool_type}-{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
+        self.region = self.settings.HIVE_WORKER_REGION.strip() or "local"
+        self.zone = self.settings.HIVE_WORKER_ZONE.strip() or "default"
+        # Phase 5b worker.id: `${poolType}-${region}-${zone}-${hostname}-${shortId}`.
+        self.worker_id = (
+            f"{self.pool_type}-{self.region}-{self.zone}-"
+            f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
+        )
         self._handlers: dict[str, Handler] = {}
         self._active_jobs = 0
         self._sem = asyncio.Semaphore(self.capacity)
@@ -49,6 +74,8 @@ class HiveWorker(ABC):
         self._status: str = "online"  # online | draining
         self._should_exit = False
         self._in_flight_jobs: set[str] = set()
+        self._subscriptions: list[tuple[str, str]] = []
+        self._stream_to_group: dict[str, str] = {}
 
     def register(self, template_name: str, handler: Handler) -> None:
         self._handlers[template_name] = handler
@@ -60,22 +87,24 @@ class HiveWorker(ABC):
 
     @property
     def stream(self) -> str:
-        return f"hive:pool:{self.pool_type}"
+        """First eligible stream; kept for backward compat with subclasses."""
+        return pool_stream_for(self.pool_type, ANY, ANY)
 
     @property
     def group(self) -> str:
-        return f"hive:pool:{self.pool_type}:workers"
+        return pool_group_for(self.pool_type, ANY, ANY)
 
-    async def _ensure_group(self) -> None:
+    async def _ensure_groups(self) -> None:
         assert self._redis_main is not None
-        try:
-            await self._redis_main.xgroup_create(self.stream, self.group, id="$", mkstream=True)
-            log.info("worker.group_created", group=self.group, stream=self.stream)
-        except Exception as e:
-            if "BUSYGROUP" in str(e):
-                log.info("worker.group_exists", group=self.group)
-            else:
-                raise
+        for stream, group in self._subscriptions:
+            try:
+                await self._redis_main.xgroup_create(stream, group, id="$", mkstream=True)
+                log.info("worker.group_created", group=group, stream=stream)
+            except Exception as e:
+                if "BUSYGROUP" in str(e):
+                    log.info("worker.group_exists", group=group)
+                else:
+                    raise
 
     async def _process(self, data: dict[str, str]) -> None:
         job_id = data.get("jobId", "")
@@ -152,7 +181,7 @@ class HiveWorker(ABC):
         await joblog.flush()
         await joblog.signal_terminal(terminal_status)
 
-    async def _consume_one(self, entry_id: str, fields_map: dict[str, str]) -> None:
+    async def _consume_one(self, stream: str, entry_id: str, fields_map: dict[str, str]) -> None:
         async with self._sem:
             self._active_jobs += 1
             job_id = fields_map.get("jobId", "")
@@ -164,11 +193,15 @@ class HiveWorker(ABC):
                 if job_id:
                     self._in_flight_jobs.discard(job_id)
                 self._active_jobs -= 1
+                group = self._stream_to_group.get(stream)
+                if not group:
+                    log.error("worker.xack_unknown_stream", stream=stream, entry_id=entry_id)
+                    return
                 try:
                     assert self._redis_main is not None
-                    await self._redis_main.xack(self.stream, self.group, entry_id)
+                    await self._redis_main.xack(stream, group, entry_id)
                 except Exception as e:
-                    log.error("worker.xack_failed", err=str(e), entry_id=entry_id)
+                    log.error("worker.xack_failed", err=str(e), entry_id=entry_id, stream=stream)
 
     async def _graceful_shutdown(self, sig: str) -> None:
         log.info("worker.signal", sig=sig, in_flight=len(self._in_flight_jobs))
@@ -199,7 +232,11 @@ class HiveWorker(ABC):
     async def _consume_loop(self) -> None:
         assert self._redis_block is not None
         consumer_name = self.worker_id
-        log.info("worker.consume_loop.start", stream=self.stream, consumer=consumer_name)
+        log.info(
+            "worker.consume_loop.start",
+            streams=[s for s, _ in self._subscriptions],
+            consumer=consumer_name,
+        )
         while not self._should_exit:
             if await self._check_drain():
                 if self._status != "draining":
@@ -210,18 +247,29 @@ class HiveWorker(ABC):
                     return
                 await asyncio.sleep(1.0)
                 continue
-            res = await self._redis_block.xreadgroup(
-                self.group,
-                consumer_name,
-                {self.stream: ">"},
-                count=self.capacity,
-                block=5000,
-            )
-            if not res:
-                continue
-            for _stream_name, entries in res:
-                for entry_id, fields_map in entries:
-                    asyncio.create_task(self._consume_one(entry_id, fields_map))
+
+            got = False
+            # XREADGROUP targets one (stream, group) at a time. Round-robin
+            # through each eligible stream with a short BLOCK so any one of
+            # them can deliver work without starving the others.
+            for stream, group in self._subscriptions:
+                if self._should_exit:
+                    break
+                res = await self._redis_block.xreadgroup(
+                    group,
+                    consumer_name,
+                    {stream: ">"},
+                    count=self.capacity,
+                    block=2000,
+                )
+                if not res:
+                    continue
+                got = True
+                for _stream_name, entries in res:
+                    for entry_id, fields_map in entries:
+                        asyncio.create_task(self._consume_one(stream, entry_id, fields_map))
+            if not got:
+                await asyncio.sleep(0.1)
 
     async def run(self) -> None:
         configure_logging(
@@ -239,7 +287,9 @@ class HiveWorker(ABC):
             decode_responses=True,
             socket_keepalive=True,
         )
-        await self._ensure_group()
+        self._subscriptions = worker_eligible_streams(self.pool_type, self.region, self.zone)
+        self._stream_to_group = {s: g for s, g in self._subscriptions}
+        await self._ensure_groups()
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -258,6 +308,8 @@ class HiveWorker(ABC):
             capacity=self.capacity,
             api_base_url=self.settings.API_BASE_URL,
             auth_token=self.settings.WORKER_AUTH_TOKEN,
+            region=self.region,
+            zone=self.zone,
             get_active_jobs=lambda: self._active_jobs,
             get_status=lambda: self._status,
             extra_metadata={"singleton": True} if self.singleton else None,

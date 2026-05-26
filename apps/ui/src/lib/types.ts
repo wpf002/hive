@@ -2,7 +2,19 @@ export type Pool =
   | 'browser' | 'scraper' | 'rpa_desktop' | 'discord' | 'telegram'
   | 'trading' | 'monitor' | 'mcp_host' | 'ci_agent' | 'task_runner' | 'ai_agent';
 
-export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type JobStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'unroutable';
+
+/** Phase 5b: optional dispatch-time placement on a template or bot. */
+export interface Affinity {
+  region?: string | null;
+  zone?: string | null;
+}
 
 export interface BotTemplate {
   id: string;
@@ -11,6 +23,7 @@ export interface BotTemplate {
   poolType: Pool;
   configSchema: Record<string, unknown>;
   defaultConfig: Record<string, unknown>;
+  affinity: Affinity | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,6 +34,7 @@ export interface Bot {
   template?: BotTemplate;
   name: string;
   config: Record<string, unknown>;
+  affinityOverride: Affinity | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -68,6 +82,8 @@ export interface Worker {
   id: string;
   poolType: Pool;
   hostname: string;
+  region: string;
+  zone: string;
   status: 'online' | 'offline' | 'draining';
   capacity: number;
   activeJobs: number;

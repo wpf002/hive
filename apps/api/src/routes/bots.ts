@@ -15,17 +15,30 @@ function maskBot<T extends BotWithTemplate>(bot: T): T {
   return { ...bot, config: maskBotConfig(bot.template, bot.config) };
 }
 
+// Phase 5b: optional dispatch-time placement. Either field may be omitted —
+// then the bot inherits its template's affinity (or 'any:any' if the template
+// also has none).
+const AffinitySchema = z
+  .object({
+    region: z.string().min(1).optional(),
+    zone: z.string().min(1).optional(),
+  })
+  .nullable()
+  .optional();
+
 const Create = z.object({
   templateId: z.string().min(1),
   name: z.string().min(1),
   config: z.record(z.unknown()).default({}),
   enabled: z.boolean().optional(),
+  affinityOverride: AffinitySchema,
 });
 
 const Patch = z.object({
   name: z.string().min(1).optional(),
   config: z.record(z.unknown()).optional(),
   enabled: z.boolean().optional(),
+  affinityOverride: AffinitySchema,
 });
 
 export async function botRoutes(app: FastifyInstance) {
@@ -44,6 +57,10 @@ export async function botRoutes(app: FastifyInstance) {
         name: body.name,
         config: encryptedConfig as Prisma.InputJsonValue,
         enabled: body.enabled ?? true,
+        affinityOverride:
+          body.affinityOverride === undefined || body.affinityOverride === null
+            ? Prisma.JsonNull
+            : (body.affinityOverride as Prisma.InputJsonValue),
       },
       include: { template: true },
     });
@@ -82,6 +99,14 @@ export async function botRoutes(app: FastifyInstance) {
       const data: Prisma.BotUpdateInput = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
+        ...(body.affinityOverride !== undefined
+          ? {
+              affinityOverride:
+                body.affinityOverride === null
+                  ? Prisma.JsonNull
+                  : (body.affinityOverride as Prisma.InputJsonValue),
+            }
+          : {}),
       };
       if (body.config !== undefined) {
         const existing = await prisma.bot.findUnique({

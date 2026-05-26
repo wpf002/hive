@@ -30,6 +30,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # Phase 5b: opt-in second scraper worker in a different region/zone so you
+  # can exercise multi-host routing locally without a second physical machine.
+  # Bring it up with `docker compose --profile worker-fleet-test up -d`.
+  worker-fleet-test:
+    profiles: ["worker-fleet-test"]
+    build:
+      context: ../..
+      dockerfile: workers/scraper/Dockerfile
+    container_name: hive-worker-fleet-test
+    environment:
+      DATABASE_URL: postgresql://hive:hive@hive-postgres:5432/hive
+      REDIS_URL: redis://hive-redis:6379
+      # Host port 4000 on the dev machine. compose's default network can't
+      # reach a Mac/Windows host on localhost — use host.docker.internal.
+      API_BASE_URL: http://host.docker.internal:4000
+      WORKER_AUTH_TOKEN: ${WORKER_AUTH_TOKEN}
+      HIVE_SECRETS_KEY: ${HIVE_SECRETS_KEY}
+      HIVE_WORKER_REGION: eu-west
+      HIVE_WORKER_ZONE: test1
+      LOG_LEVEL: info
+      NODE_ENV: development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Phase 5a: S3-compatible storage for artifacts. Set
   # HIVE_STORAGE_PROVIDER=s3 + HIVE_ARTIFACT_S3_ENDPOINT=http://localhost:9000
   # in .env to route artifact uploads here instead of the local FS.

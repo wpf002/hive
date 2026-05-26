@@ -14,6 +14,10 @@ model BotTemplate {
   poolType    String   // browser | scraper | rpa_desktop | discord | telegram | trading | monitor | mcp_host | ci_agent | task_runner | ai_agent
   configSchema Json    // JSON Schema for params
   defaultConfig Json
+  // Phase 5b: optional dispatch-time placement. Shape: { region?: string; zone?: string }.
+  // Null = no preference; bots based on this template route to the
+  // `hive:pool:<pool>:any:any` stream by default.
+  affinity    Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   bots        Bot[]
@@ -23,16 +27,19 @@ model BotTemplate {
 
 // Bot — an instantiated template with concrete params
 model Bot {
-  id          String   @id @default(cuid())
-  templateId  String
-  template    BotTemplate @relation(fields: [templateId], references: [id])
-  name        String
-  config      Json
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  jobs        Job[]
-  schedules   Schedule[]
+  id              String   @id @default(cuid())
+  templateId      String
+  template        BotTemplate @relation(fields: [templateId], references: [id])
+  name            String
+  config          Json
+  // Phase 5b: overrides template.affinity when set. Same shape: { region?, zone? }.
+  // Null = inherit from template.
+  affinityOverride Json?
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  jobs            Job[]
+  schedules       Schedule[]
 
   @@index([templateId])
 }
@@ -88,6 +95,10 @@ model Worker {
   id           String   @id @default(cuid())
   poolType     String
   hostname     String
+  // Phase 5b: self-declared location for affinity-based routing. Single-host
+  // setups leave these at the defaults and everything keeps working.
+  region       String   @default("local")
+  zone         String   @default("default")
   status       String   // online | offline | draining
   capacity     Int      @default(1)
   activeJobs   Int      @default(0)
@@ -95,6 +106,7 @@ model Worker {
   metadata     Json?
 
   @@index([poolType, status])
+  @@index([poolType, region, zone])
 }
 
 model AiUsage {

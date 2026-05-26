@@ -12,7 +12,7 @@ const RunBody = z.object({
 });
 
 const ListQuery = z.object({
-  status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']).optional(),
+  status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'unroutable']).optional(),
   botId: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -78,6 +78,10 @@ export async function jobRoutes(app: FastifyInstance) {
           } as Prisma.InputJsonValue,
         },
       });
+      // Phase 5b: bot's effective affinity (override OR template default).
+      const effectiveAffinity = (bot.affinityOverride ?? bot.template.affinity) as
+        | { region?: string; zone?: string }
+        | null;
       await redis.xadd(
         STREAMS.dispatch,
         '*',
@@ -87,6 +91,7 @@ export async function jobRoutes(app: FastifyInstance) {
         'templateName', bot.template.name,
         'config', JSON.stringify(config),
         'priority', String(job.priority),
+        'affinity', JSON.stringify(effectiveAffinity ?? null),
       );
       return reply.code(201).send(job);
     },
@@ -196,6 +201,9 @@ export async function jobRoutes(app: FastifyInstance) {
           } as Prisma.InputJsonValue,
         },
       });
+      const effectiveAffinity = (job.bot.affinityOverride ?? job.bot.template.affinity) as
+        | { region?: string; zone?: string }
+        | null;
       await redis.xadd(
         STREAMS.dispatch,
         '*',
@@ -205,6 +213,7 @@ export async function jobRoutes(app: FastifyInstance) {
         'templateName', job.bot.template.name,
         'config', JSON.stringify(decrypted),
         'priority', String(job.priority),
+        'affinity', JSON.stringify(effectiveAffinity ?? null),
       );
       return updated;
     },

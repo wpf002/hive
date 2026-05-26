@@ -17,7 +17,8 @@
     "smoke:phase5a": "tsx --env-file=../../.env src/scripts/smoke-phase5a.ts",
     "smoke:kms-rotation": "tsx --env-file=../../.env src/scripts/smoke-kms-rotation.ts",
     "smoke:upgrade-and-migrate": "tsx --env-file=../../.env src/scripts/smoke-upgrade-and-migrate.ts",
-    "smoke:migrate-to-s3": "tsx --env-file=../../.env src/scripts/smoke-migrate-to-s3.ts"
+    "smoke:migrate-to-s3": "tsx --env-file=../../.env src/scripts/smoke-migrate-to-s3.ts",
+    "smoke:phase5b": "tsx --env-file=../../.env src/scripts/smoke-phase5b.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.0",
@@ -31,6 +32,7 @@
     "cron-parser": "^4.9.0",
     "fastify": "^4.28.0",
     "fastify-sse-v2": "^4.1.0",
+    "@hive/worker-base-ts": "workspace:*",
     "ioredis": "^5.4.0",
     "pino": "^9.3.0",
     "pino-pretty": "^11.2.0",

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     API_BASE_URL: str = Field(default="http://localhost:4000")
     LOG_LEVEL: str = Field(default="info")
     NODE_ENV: str = Field(default="development")
+    # Phase 5b: worker self-declared location for affinity-based routing.
+    HIVE_WORKER_REGION: str = Field(default="local")
+    HIVE_WORKER_ZONE: str = Field(default="default")
 
     model_config = SettingsConfigDict(
         env_file=".env",

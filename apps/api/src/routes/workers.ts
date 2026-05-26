@@ -9,6 +9,10 @@ const Heartbeat = z.object({
   workerId: z.string().min(1),
   poolType: z.string().min(1),
   hostname: z.string().min(1),
+  // Phase 5b: workers self-declare region + zone. Pre-5b workers omit these;
+  // we default both to 'local' / 'default' so they keep working unchanged.
+  region: z.string().min(1).optional(),
+  zone: z.string().min(1).optional(),
   capacity: z.number().int().positive(),
   activeJobs: z.number().int().nonnegative(),
   metadata: z.record(z.unknown()).optional(),
@@ -31,12 +35,16 @@ export async function workerRoutes(app: FastifyInstance) {
     const body = Heartbeat.parse(req.body);
     const now = new Date();
     const status = statusFromMetadata(body.metadata);
+    const region = body.region ?? 'local';
+    const zone = body.zone ?? 'default';
     const worker = await prisma.worker.upsert({
       where: { id: body.workerId },
       create: {
         id: body.workerId,
         poolType: body.poolType,
         hostname: body.hostname,
+        region,
+        zone,
         status,
         capacity: body.capacity,
         activeJobs: body.activeJobs,
@@ -46,6 +54,8 @@ export async function workerRoutes(app: FastifyInstance) {
       update: {
         poolType: body.poolType,
         hostname: body.hostname,
+        region,
+        zone,
         status,
         capacity: body.capacity,
         activeJobs: body.activeJobs,
@@ -62,7 +72,17 @@ export async function workerRoutes(app: FastifyInstance) {
       where: { status: { not: 'offline' }, lastSeenAt: { lt: cutoff } },
       data: { status: 'offline' },
     });
-    return prisma.worker.findMany({ orderBy: [{ poolType: 'asc' }, { hostname: 'asc' }] });
+    // Phase 5b: order by region/zone first so the UI can render grouped lists
+    // without a second sort pass. Single-host deployments all collapse into
+    // (region=local, zone=default) and look identical to pre-5b.
+    return prisma.worker.findMany({
+      orderBy: [
+        { region: 'asc' },
+        { zone: 'asc' },
+        { poolType: 'asc' },
+        { hostname: 'asc' },
+      ],
+    });
   });
 
   app.post<{ Params: { id: string } }>(

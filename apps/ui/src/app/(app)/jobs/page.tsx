@@ -9,7 +9,7 @@ import { fmtDuration, fmtRelative, fmtJobShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { Job, JobStatus, DlqEntry, Pool } from '@/lib/types';
 
-const STATUSES: (JobStatus | 'all')[] = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled'];
+const STATUSES: (JobStatus | 'all')[] = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'unroutable'];
 const STATUS_LABELS: Record<JobStatus | 'all', string> = {
   all: 'All',
   queued: 'Queued',
@@ -17,6 +17,7 @@ const STATUS_LABELS: Record<JobStatus | 'all', string> = {
   succeeded: 'Succeeded',
   failed: 'Failed',
   cancelled: 'Cancelled',
+  unroutable: 'Unroutable',
 };
 type Tab = 'jobs' | 'dlq';
 

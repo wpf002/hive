@@ -9,6 +9,9 @@ export interface HeartbeatOptions {
   getActiveJobs: () => number;
   getStatus?: () => 'online' | 'draining';
   hostname?: string;
+  // Phase 5b: worker self-declared location for affinity-based routing.
+  region?: string;
+  zone?: string;
   intervalMs?: number;
 }
 
@@ -22,6 +25,8 @@ export class Heartbeat {
 
   constructor(opts: HeartbeatOptions) {
     this.opts = {
+      region: 'local',
+      zone: 'default',
       ...opts,
       hostname: opts.hostname ?? osHostname(),
       intervalMs: opts.intervalMs ?? DEFAULT_INTERVAL,
@@ -55,9 +60,11 @@ export class Heartbeat {
           workerId: this.opts.workerId,
           poolType: this.opts.poolType,
           hostname: this.opts.hostname,
+          region: this.opts.region,
+          zone: this.opts.zone,
           capacity: this.opts.capacity,
           activeJobs: this.opts.getActiveJobs(),
-          metadata: { status },
+          metadata: { status, region: this.opts.region, zone: this.opts.zone },
         }),
         signal: AbortSignal.timeout(5_000),
       });
