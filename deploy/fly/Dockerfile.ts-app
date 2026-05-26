@@ -1,0 +1,50 @@
+# Shared multi-stage Dockerfile for every TypeScript service in this monorepo
+# (apps/api, apps/dispatcher, apps/scheduler, apps/session-sweeper, apps/ui,
+# workers/ai_agent, workers/mcp_host, workers/trading).
+#
+#   docker build -f deploy/fly/Dockerfile.ts-app \
+#                --build-arg SERVICE=apps/api .
+#
+# Why one Dockerfile: every TS service uses the same pnpm workspace install +
+# tsx-runtime pattern, so duplicating per-service buys us nothing except more
+# files to keep in sync. The SERVICE build arg selects which workspace's dev
+# script gets invoked at runtime.
+ARG NODE_VERSION=20.16.0
+
+# --- deps stage: cache the full workspace install ---
+FROM node:${NODE_VERSION}-bookworm-slim AS deps
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY apps ./apps
+COPY packages ./packages
+COPY workers/ai_agent ./workers/ai_agent
+COPY workers/mcp_host ./workers/mcp_host
+COPY workers/trading ./workers/trading
+RUN pnpm install --frozen-lockfile
+
+# --- build stage: prisma generate so the client is baked into the image ---
+FROM deps AS build
+ENV NODE_ENV=production
+RUN pnpm --filter @hive/db generate
+
+# --- runtime stage ---
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+ARG SERVICE=apps/api
+ENV NODE_ENV=production \
+    PORT=4000 \
+    SERVICE=${SERVICE} \
+    PNPM_HOME=/pnpm
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+# Bring the fully-installed workspace from the build stage so we don't re-install.
+COPY --from=build /app /app
+
+# Pick a port reasonable for each service. fly.toml's `internal_port` should
+# match. Defaults to 4000 for apps/api; override at run time via PORT.
+ENV PORT=4000
+
+# We launch via the workspace's `start` script if it exists, otherwise `dev`
+# under tsx. apps/api & friends define `start`; some thinner services only
+# expose `dev` which is fine for now.
+CMD ["sh", "-c", "pnpm --filter $(node -e \"const p=require('/app/${SERVICE}/package.json');process.stdout.write(p.name)\") run start || pnpm --filter $(node -e \"const p=require('/app/${SERVICE}/package.json');process.stdout.write(p.name)\") run dev"]

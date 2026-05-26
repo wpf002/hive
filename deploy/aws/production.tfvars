@@ -1,0 +1,10 @@
+aws_region          = "us-east-1"
+env_label           = "production"
+prod                = true
+artifact_bucket     = "hive-artifacts-prod"
+rds_instance_class  = "db.r6g.large"
+redis_node_type     = "cache.r6g.large"
+certificate_arn     = "arn:aws:acm:us-east-1:000000000000:certificate/REPLACE-ME"
+api_image           = "000000000000.dkr.ecr.us-east-1.amazonaws.com/hive-api:prod"
+ui_image            = "000000000000.dkr.ecr.us-east-1.amazonaws.com/hive-ui:prod"
+worker_image_prefix = "000000000000.dkr.ecr.us-east-1.amazonaws.com/hive-worker"

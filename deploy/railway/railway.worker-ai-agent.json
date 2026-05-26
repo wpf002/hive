@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/fly/Dockerfile.ts-app",
+    "dockerfileBuildArgs": { "SERVICE": "workers/ai_agent" }
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter ai_agent start",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

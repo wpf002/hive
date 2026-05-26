@@ -1,0 +1,38 @@
+app = "hive-ui"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "apps/ui"
+
+[env]
+  NODE_ENV       = "production"
+  UI_PORT        = "3001"
+  HIVE_ENV_LABEL = "production"
+  # NEXT_PUBLIC_API_BASE must point at the *deployed* hive-api app URL.
+  # Set it here AFTER the API deploy:
+  #   flyctl secrets set --app hive-ui NEXT_PUBLIC_API_BASE=https://hive-api.fly.dev
+  # NEXT_PUBLIC_* values are bundled into the client at build time, so a
+  # change requires a redeploy — fly's `flyctl deploy` is correct.
+
+[http_service]
+  internal_port        = 3001
+  force_https          = true
+  auto_stop_machines   = true   # UI is stateless; fine to spin down idle.
+  auto_start_machines  = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval     = "30s"
+  method       = "GET"
+  path         = "/"
+  protocol     = "http"
+  timeout      = "10s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"

@@ -1,0 +1,57 @@
+# Fly config for the Hive API.
+#
+#   flyctl deploy --config deploy/fly/api.fly.toml \
+#                 --build-arg SERVICE=apps/api \
+#                 --dockerfile deploy/fly/Dockerfile.ts-app
+#
+# Secrets to set BEFORE the first deploy (replace `<APP>` with this app name):
+#   flyctl secrets set --app <APP> \
+#     DATABASE_URL=... REDIS_URL=... \
+#     API_AUTH_TOKEN=... WORKER_AUTH_TOKEN=... \
+#     JWT_SECRET=... SESSION_SECRET=... \
+#     HIVE_SECRETS_KEY=... \
+#     ADMIN_EMAIL=... ADMIN_PASSWORD=...
+
+app = "hive-api"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "apps/api"
+
+[env]
+  NODE_ENV       = "production"
+  API_PORT       = "4000"
+  HIVE_ENV_LABEL = "production"
+  HIVE_STORAGE_PROVIDER     = "s3"
+  HIVE_ARTIFACT_S3_BUCKET   = "hive-artifacts"
+  HIVE_ARTIFACT_S3_ENDPOINT = "https://fly.storage.tigris.dev"
+  HIVE_ARTIFACT_S3_REGION   = "auto"
+  HIVE_KMS_PROVIDER = "static"  # Fly has no managed KMS; AWS deploys use 'aws'.
+
+[http_service]
+  internal_port       = 4000
+  force_https         = true
+  auto_stop_machines  = false  # API holds the dispatch stream; keep it warm.
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type        = "requests"
+    soft_limit  = 100
+    hard_limit  = 200
+
+[[http_service.checks]]
+  grace_period  = "10s"
+  interval      = "15s"
+  method        = "GET"
+  path          = "/healthz"
+  protocol      = "http"
+  timeout       = "5s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"

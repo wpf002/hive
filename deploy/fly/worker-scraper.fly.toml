@@ -1,0 +1,24 @@
+# Python scraper worker. Auto-scales 0..N on inbound jobs; this is a worker,
+# not an HTTP service, so we omit [http_service] and rely on the worker's own
+# heartbeat keepalive.
+app = "hive-worker-scraper"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.python-worker"
+
+[build.args]
+  WORKER = "scraper"
+
+[env]
+  HIVE_WORKER_REGION  = "fly-ord"
+  HIVE_WORKER_ZONE    = "default"
+  HIVE_ENV_LABEL      = "production"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"
+
+# Scale workers manually for now: `flyctl scale count 2 --app hive-worker-scraper`.
+# Auto-scaling on queue depth is a Phase 6 idea.

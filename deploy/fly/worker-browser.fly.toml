@@ -1,0 +1,17 @@
+# The browser worker needs Chromium and runs significantly bigger images
+# (~500MB). See workers/browser/Dockerfile for the install steps.
+app = "hive-worker-browser"
+primary_region = "ord"
+
+[build]
+  dockerfile = "../../workers/browser/Dockerfile"
+
+[env]
+  HIVE_WORKER_REGION = "fly-ord"
+  HIVE_WORKER_ZONE   = "default"
+  HIVE_ENV_LABEL     = "production"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 2
+  memory   = "1gb"

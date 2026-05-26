@@ -1,0 +1,31 @@
+# Shared Dockerfile for every Python worker.
+#
+#   docker build -f deploy/fly/Dockerfile.python-worker \
+#                --build-arg WORKER=scraper .
+#
+# WORKER must match a directory under workers/ that ships a pyproject.toml
+# whose `[project.scripts]` entry is named `hive-${WORKER}`. The container
+# launches that script.
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim AS runtime
+ARG WORKER=scraper
+
+WORKDIR /app
+
+# System deps. Browser workers need an extended base — see browser-specific
+# Dockerfile in workers/browser/. This base covers httpx-only pools.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY workers/base/ /app/workers/base/
+COPY workers/${WORKER}/ /app/workers/${WORKER}/
+
+RUN pip install --no-cache-dir -e /app/workers/base -e /app/workers/${WORKER}
+
+ENV PYTHONUNBUFFERED=1 \
+    WORKER=${WORKER} \
+    HIVE_WORKER_REGION=fly \
+    HIVE_WORKER_ZONE=default
+
+CMD ["sh", "-c", "exec hive-${WORKER}"]

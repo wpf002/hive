@@ -1,0 +1,18 @@
+app = "hive-worker-ai-agent"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "workers/ai_agent"
+
+[env]
+  HIVE_WORKER_REGION = "fly-ord"
+  HIVE_WORKER_ZONE   = "default"
+  HIVE_ENV_LABEL     = "production"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"

@@ -1,0 +1,20 @@
+app = "hive-worker-trading"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "workers/trading"
+
+[env]
+  HIVE_WORKER_REGION = "fly-ord"
+  HIVE_WORKER_ZONE   = "default"
+  HIVE_ENV_LABEL     = "production"
+  TRADING_LIVE_ENABLED = "false"  # paper mode by default; set 'true' here +
+                                  # restart to enable live exchange calls.
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"

@@ -10,6 +10,10 @@ export function registerHealth(app: FastifyInstance) {
     tradingLiveEnabled: env.TRADING_LIVE_ENABLED === 'true',
     signupsEnabled: process.env.SIGNUPS_ENABLED === 'true',
     nodeEnv: env.NODE_ENV,
+    // Phase 5c: optional human-readable environment tag. UI renders this as a
+    // colored pill in the top bar so an operator can see at a glance whether
+    // they're looking at staging vs production.
+    envLabel: process.env.HIVE_ENV_LABEL ?? null,
   }));
 
   app.get('/healthz', async () => {

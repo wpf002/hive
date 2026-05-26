@@ -1,0 +1,43 @@
+# Fly config for the Hive dispatcher.
+#   flyctl deploy --config deploy/fly/dispatcher.fly.toml \
+#                 --build-arg SERVICE=apps/dispatcher \
+#                 --dockerfile deploy/fly/Dockerfile.ts-app
+#
+# The dispatcher holds a Redis consumer group on hive:dispatch — only ONE
+# instance should run. auto_stop_machines is disabled and min_machines_running
+# is 1; bumping scale > 1 will result in some entries being delivered to the
+# extra dispatcher and dropped.
+
+app = "hive-dispatcher"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "apps/dispatcher"
+
+[env]
+  NODE_ENV         = "production"
+  DISPATCHER_PORT  = "4100"
+  HIVE_ENV_LABEL   = "production"
+
+[http_service]
+  internal_port        = 4100
+  force_https          = true
+  auto_stop_machines   = false
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval     = "15s"
+  method       = "GET"
+  path         = "/healthz"
+  protocol     = "http"
+  timeout      = "5s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "256mb"

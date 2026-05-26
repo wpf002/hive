@@ -159,4 +159,5 @@ export interface SysInfo {
   tradingLiveEnabled: boolean;
   signupsEnabled: boolean;
   nodeEnv: string;
+  envLabel: string | null;
 }

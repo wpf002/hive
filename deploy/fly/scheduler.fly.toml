@@ -1,0 +1,33 @@
+app = "hive-scheduler"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.ts-app"
+
+[build.args]
+  SERVICE = "apps/scheduler"
+
+[env]
+  NODE_ENV        = "production"
+  SCHEDULER_PORT  = "4102"
+  HIVE_ENV_LABEL  = "production"
+
+[http_service]
+  internal_port        = 4102
+  force_https          = true
+  auto_stop_machines   = false
+  auto_start_machines  = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval     = "15s"
+  method       = "GET"
+  path         = "/healthz"
+  protocol     = "http"
+  timeout      = "5s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "256mb"
