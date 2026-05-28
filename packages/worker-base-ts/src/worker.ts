@@ -1,8 +1,10 @@
 import { hostname as osHostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 import { Redis } from 'ioredis';
 import { JobLogger } from './joblog.js';
 import { Heartbeat } from './heartbeat.js';
+import { startWorkerHealthz } from './healthz.js';
 import {
   DLQ_STREAM,
   workerEligibleStreams,
@@ -49,6 +51,7 @@ export abstract class WorkerBase {
   protected redisMain!: Redis;
   protected redisBlock!: Redis;
   protected heartbeat!: Heartbeat;
+  private healthzServer: Server | null = null;
   private readonly handlers = new Map<string, Handler>();
   private activeJobs = 0;
   private status: 'online' | 'draining' = 'online';
@@ -121,6 +124,19 @@ export abstract class WorkerBase {
     });
     this.heartbeat.start();
 
+    // Phase 6c.2: optional /healthz HTTP endpoint. Opt-in via env so workers
+    // stay pure stream consumers unless an operator wants HTTP probes.
+    const healthzPort = Number(process.env.HIVE_WORKER_HEALTHZ_PORT ?? '0');
+    if (healthzPort > 0) {
+      this.healthzServer = startWorkerHealthz({
+        port: healthzPort,
+        poolType: this.opts.poolType,
+        startedAt: Date.now(),
+        heartbeat: this.heartbeat,
+        getRedis: () => this.redisMain,
+      });
+    }
+
     console.log(JSON.stringify({
       ts: new Date().toISOString(),
       service: `worker-${this.opts.poolType}`,
@@ -143,6 +159,9 @@ export abstract class WorkerBase {
       await this.consumeLoop();
     } finally {
       await this.heartbeat.stop();
+      if (this.healthzServer) {
+        try { this.healthzServer.close(); } catch { /* noop */ }
+      }
       try { this.redisMain.disconnect(); } catch { /* noop */ }
       try { this.redisBlock.disconnect(); } catch { /* noop */ }
     }

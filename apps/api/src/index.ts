@@ -15,6 +15,7 @@ import { aiRoutes } from './routes/ai.js';
 import { tradingRoutes } from './routes/trading.js';
 import { authRoutes } from './routes/auth.js';
 import { artifactRoutes } from './routes/artifacts.js';
+import { statusRoutes } from './routes/status.js';
 import { initStorage } from './lib/artifacts.js';
 
 await initStorage();
@@ -49,6 +50,7 @@ app.register(scheduleRoutes);
 app.register(aiRoutes);
 app.register(tradingRoutes);
 app.register(artifactRoutes);
+app.register(statusRoutes);
 
 try {
   await app.listen({ port: env.API_PORT, host: '0.0.0.0' });

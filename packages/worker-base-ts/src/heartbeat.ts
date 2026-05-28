@@ -19,9 +19,16 @@ const DEFAULT_INTERVAL = 10_000;
 
 export class Heartbeat {
   private timer: ReturnType<typeof setInterval> | null = null;
+  // Epoch ms of the most recent heartbeat the API accepted (read by /healthz).
+  private lastSuccessAt = 0;
   private readonly opts: Required<Omit<HeartbeatOptions, 'getStatus'>> & {
     getStatus?: () => 'online' | 'draining';
   };
+
+  /** Epoch ms of the last successful heartbeat (0 if none yet). */
+  getLastSuccessAt(): number {
+    return this.lastSuccessAt;
+  }
 
   constructor(opts: HeartbeatOptions) {
     this.opts = {
@@ -50,7 +57,7 @@ export class Heartbeat {
   private async send(): Promise<void> {
     const status = this.opts.getStatus?.() ?? 'online';
     try {
-      await fetch(`${this.opts.apiBaseUrl.replace(/\/$/, '')}/api/workers/heartbeat`, {
+      const res = await fetch(`${this.opts.apiBaseUrl.replace(/\/$/, '')}/api/workers/heartbeat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,6 +75,9 @@ export class Heartbeat {
         }),
         signal: AbortSignal.timeout(5_000),
       });
+      // <500 means the API received it (4xx is a config/auth problem, not a
+      // connectivity one) — count it as a successful keepalive for /healthz.
+      if (res.status < 500) this.lastSuccessAt = Date.now();
     } catch {
       /* heartbeat must not crash worker */
     }

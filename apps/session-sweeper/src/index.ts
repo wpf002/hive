@@ -8,6 +8,7 @@
 import Fastify from 'fastify';
 import type { LoggerOptions } from 'pino';
 import { prisma } from '@hive/db';
+import { createHealthz, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
 import { startAuditAlerts } from './audit-alerts.js';
 
@@ -41,13 +42,36 @@ const state: SweepRecord = {
   sweepCount: 0,
 };
 
-app.get('/healthz', async () => ({
-  status: 'ok',
+const healthz = createHealthz({
   service: 'session-sweeper',
-  uptimeMs: Date.now() - startedAt,
-  intervalSeconds: env.SESSION_SWEEP_INTERVAL_S,
-  ...state,
-}));
+  startedAt,
+  checkFn: async (): Promise<HealthChecks> => {
+    const checks: HealthChecks = { service: { ok: true } };
+    // Healthy if a sweep has succeeded within 2× the interval. We allow the
+    // grace of one boot interval before the first sweep registers.
+    const intervalMs = env.SESSION_SWEEP_INTERVAL_S * 1000;
+    const lastMs = state.lastSweepAt ? Date.parse(state.lastSweepAt) : null;
+    // Before the first sweep registers, measure age from boot; after, from the
+    // last successful sweep. Either way, fresh = within 2× the interval.
+    const age = lastMs === null ? Date.now() - startedAt : Date.now() - lastMs;
+    checks.last_sweep = {
+      ok: age < intervalMs * 2,
+      lastSweepAt: state.lastSweepAt,
+      ageSeconds: Math.floor(age / 1000),
+      intervalSeconds: env.SESSION_SWEEP_INTERVAL_S,
+      sweepCount: state.sweepCount,
+    };
+    return checks;
+  },
+});
+
+app.get('/healthz', async (req, reply) => {
+  const r = await healthz(req.headers['if-none-match']);
+  reply.header('ETag', r.etag);
+  reply.header('Cache-Control', 'public, max-age=5');
+  if (r.notModified) return reply.code(304).send();
+  return reply.code(r.code).send(r.body);
+});
 
 async function sweep(): Promise<void> {
   try {

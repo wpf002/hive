@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '@hive/db';
+import { createHealthz, type HealthChecks } from '@hive/shared';
 import { redis } from './redis.js';
 import { env } from './env.js';
 
@@ -16,31 +17,32 @@ export function registerHealth(app: FastifyInstance) {
     envLabel: process.env.HIVE_ENV_LABEL ?? null,
   }));
 
-  app.get('/healthz', async () => {
-    const checks: Record<string, { ok: boolean; error?: string }> = {
-      postgres: { ok: true },
-      redis: { ok: true },
-      service: { ok: true },
-    };
+  const healthz = createHealthz({
+    service: 'api',
+    startedAt,
+    checkFn: async (): Promise<HealthChecks> => {
+      const checks: HealthChecks = { service: { ok: true } };
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        checks.postgres = { ok: true };
+      } catch (e) {
+        checks.postgres = { ok: false, error: (e as Error).message };
+      }
+      try {
+        const pong = await redis.ping();
+        checks.redis = { ok: pong === 'PONG' };
+      } catch (e) {
+        checks.redis = { ok: false, error: (e as Error).message };
+      }
+      return checks;
+    },
+  });
 
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-    } catch (e) {
-      checks.postgres = { ok: false, error: (e as Error).message };
-    }
-    try {
-      const pong = await redis.ping();
-      checks.redis = { ok: pong === 'PONG' };
-    } catch (e) {
-      checks.redis = { ok: false, error: (e as Error).message };
-    }
-
-    const allOk = Object.values(checks).every((c) => c.ok);
-    return {
-      status: allOk ? 'ok' : 'degraded',
-      service: 'api',
-      uptimeMs: Date.now() - startedAt,
-      checks,
-    };
+  app.get('/healthz', async (req, reply) => {
+    const r = await healthz(req.headers['if-none-match']);
+    reply.header('ETag', r.etag);
+    reply.header('Cache-Control', 'public, max-age=5');
+    if (r.notModified) return reply.code(304).send();
+    return reply.code(r.code).send(r.body);
   });
 }

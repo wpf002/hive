@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import socket
+import time
 from typing import Optional
 import httpx
 import structlog
@@ -40,6 +41,8 @@ class Heartbeat:
         self.interval_s = interval_s
         self.extra_metadata = extra_metadata or {}
         self._task: Optional[asyncio.Task] = None
+        # Epoch seconds of the last heartbeat the API accepted (read by /healthz).
+        self.last_success_at: float = 0.0
 
     async def _send_once(self, client: httpx.AsyncClient) -> None:
         try:
@@ -62,6 +65,10 @@ class Heartbeat:
             )
             if r.status_code >= 400:
                 log.warn("heartbeat.bad_status", status=r.status_code, body=r.text[:200])
+            # <500 means the API received it (4xx = auth/config, not connectivity)
+            # — count as a successful keepalive for /healthz freshness.
+            if r.status_code < 500:
+                self.last_success_at = time.time()
         except Exception as e:
             log.warn("heartbeat.failed", err=str(e))
 

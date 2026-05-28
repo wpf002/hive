@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # Phase 5b: worker self-declared location for affinity-based routing.
     HIVE_WORKER_REGION: str = Field(default="local")
     HIVE_WORKER_ZONE: str = Field(default="default")
+    # Phase 6c: optional /healthz HTTP port. 0 = disabled (workers are stream
+    # consumers, not HTTP services). Set to expose heartbeat + redis health.
+    HIVE_WORKER_HEALTHZ_PORT: int = Field(default=0)
 
     model_config = SettingsConfigDict(
         env_file=".env",

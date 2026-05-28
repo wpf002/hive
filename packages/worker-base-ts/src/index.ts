@@ -3,6 +3,7 @@ export type { Handler, WorkerOptions, JobFields } from './worker.js';
 export { JobLogger } from './joblog.js';
 export type { LogLevel, LogEntry } from './joblog.js';
 export { Heartbeat } from './heartbeat.js';
+export { startWorkerHealthz } from './healthz.js';
 export {
   markRunning,
   markSucceeded,

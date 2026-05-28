@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import type { LoggerOptions } from 'pino';
 import { prisma } from '@hive/db';
 import { dispatchStreamFor, POOL_STREAM_ANY } from '@hive/worker-base-ts';
+import { createHealthz, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
 
 const KNOWN_POOLS = new Set([
@@ -52,23 +53,40 @@ const startedAt = Date.now();
 const producer = new Redis(env.REDIS_URL, { lazyConnect: false });
 const consumer = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: false });
 
-app.get('/healthz', async () => {
-  const checks: Record<string, { ok: boolean; error?: string }> = {
-    redis: { ok: true },
-    service: { ok: true },
-  };
-  try {
-    const pong = await producer.ping();
-    checks.redis = { ok: pong === 'PONG' };
-  } catch (e) {
-    checks.redis = { ok: false, error: (e as Error).message };
-  }
-  return {
-    status: Object.values(checks).every((c) => c.ok) ? 'ok' : 'degraded',
-    service: 'dispatcher',
-    uptimeMs: Date.now() - startedAt,
-    checks,
-  };
+// Consumer lag is degraded above this many unacked entries on hive:dispatch.
+const DISPATCH_LAG_LIMIT = 1000;
+
+const healthz = createHealthz({
+  service: 'dispatcher',
+  startedAt,
+  checkFn: async (): Promise<HealthChecks> => {
+    const checks: HealthChecks = { service: { ok: true } };
+    try {
+      const pong = await producer.ping();
+      checks.redis = { ok: pong === 'PONG' };
+    } catch (e) {
+      checks.redis = { ok: false, error: (e as Error).message };
+    }
+    // Pending (delivered-but-unacked) entries on the dispatch stream's group =
+    // a proxy for consumer lag. If the dispatcher is keeping up this stays low.
+    try {
+      const pending = (await producer.xpending(DISPATCH_STREAM, GROUP)) as [number, ...unknown[]] | null;
+      const lag = Array.isArray(pending) ? Number(pending[0] ?? 0) : 0;
+      checks.dispatch_lag = { ok: lag < DISPATCH_LAG_LIMIT, lag, limit: DISPATCH_LAG_LIMIT };
+    } catch (e) {
+      // NOGROUP before the group is created on first boot — treat as zero lag.
+      checks.dispatch_lag = { ok: true, lag: 0, note: (e as Error).message };
+    }
+    return checks;
+  },
+});
+
+app.get('/healthz', async (req, reply) => {
+  const r = await healthz(req.headers['if-none-match']);
+  reply.header('ETag', r.etag);
+  reply.header('Cache-Control', 'public, max-age=5');
+  if (r.notModified) return reply.code(304).send();
+  return reply.code(r.code).send(r.body);
 });
 
 async function ensureGroup() {

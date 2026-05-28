@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import type { LoggerOptions } from 'pino';
 import cronParser from 'cron-parser';
 import { prisma } from '@hive/db';
+import { createHealthz, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
 
 const TICK_MS = 30_000;
@@ -23,11 +24,43 @@ const loggerOptions: LoggerOptions = {
 
 const app = Fastify({ logger: loggerOptions });
 
-app.get('/healthz', async () => ({
-  status: 'ok',
+const healthz = createHealthz({
   service: 'scheduler',
-  uptimeMs: Date.now() - startedAt,
-}));
+  startedAt,
+  checkFn: async (): Promise<HealthChecks> => {
+    const checks: HealthChecks = { service: { ok: true } };
+    let dbOk = true;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.postgres = { ok: true };
+    } catch (e) {
+      dbOk = false;
+      checks.postgres = { ok: false, error: (e as Error).message };
+    }
+    // "schedules loaded count > 0 if any active" — degraded only if there ARE
+    // active schedules in the DB but our in-memory cache loaded none of them.
+    if (dbOk) {
+      const activeInDb = await prisma.schedule.count({ where: { enabled: true } });
+      const loaded = cache.length;
+      checks.schedules = {
+        ok: activeInDb === 0 || loaded > 0,
+        loaded,
+        activeInDb,
+      };
+    } else {
+      checks.schedules = { ok: false, loaded: cache.length };
+    }
+    return checks;
+  },
+});
+
+app.get('/healthz', async (req, reply) => {
+  const r = await healthz(req.headers['if-none-match']);
+  reply.header('ETag', r.etag);
+  reply.header('Cache-Control', 'public, max-age=5');
+  if (r.notModified) return reply.code(304).send();
+  return reply.code(r.code).send(r.body);
+});
 
 interface CachedSchedule {
   id: string;

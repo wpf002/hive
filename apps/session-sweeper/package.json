@@ -12,6 +12,7 @@
   "dependencies": {
     "@hive/db": "workspace:*",
     "@hive/email": "workspace:*",
+    "@hive/shared": "workspace:*",
     "fastify": "^4.28.0",
     "ioredis": "^5.4.0",
     "pino": "^9.3.0",

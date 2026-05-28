@@ -4,6 +4,7 @@ import asyncio
 import json
 import signal
 import socket
+import time
 import traceback
 import uuid
 from abc import ABC, abstractmethod
@@ -15,6 +16,7 @@ from .logging import configure_logging
 from .joblog import JobLogger
 from . import db as dbmod
 from .heartbeat import Heartbeat
+from .healthz import WorkerHealthz
 
 log = structlog.get_logger()
 
@@ -71,6 +73,7 @@ class HiveWorker(ABC):
         self._redis_main: Optional[redis_async.Redis] = None
         self._redis_block: Optional[redis_async.Redis] = None
         self._heartbeat: Optional[Heartbeat] = None
+        self._healthz: Optional[WorkerHealthz] = None
         self._status: str = "online"  # online | draining
         self._should_exit = False
         self._in_flight_jobs: set[str] = set()
@@ -316,12 +319,38 @@ class HiveWorker(ABC):
         )
         self._heartbeat.start()
 
+        # Phase 6c.2: optional /healthz HTTP endpoint (opt-in via env).
+        healthz_port = int(self.settings.HIVE_WORKER_HEALTHZ_PORT or 0)
+        if healthz_port > 0:
+            async def _healthz_checks() -> dict[str, dict[str, Any]]:
+                checks: dict[str, dict[str, Any]] = {"service": {"ok": True}}
+                last = self._heartbeat.last_success_at if self._heartbeat else 0.0
+                age = (time.time() - last) if last else float("inf")
+                checks["heartbeat"] = {
+                    "ok": last > 0 and age < 30.0,
+                    "age_seconds": None if age == float("inf") else int(age),
+                }
+                try:
+                    assert self._redis_main is not None
+                    pong = await self._redis_main.ping()
+                    checks["redis"] = {"ok": bool(pong)}
+                except Exception as e:  # noqa: BLE001
+                    checks["redis"] = {"ok": False, "error": str(e)}
+                return checks
+
+            self._healthz = WorkerHealthz(
+                port=healthz_port, pool_type=self.pool_type, check_fn=_healthz_checks
+            )
+            await self._healthz.start()
+
         log.info("worker.start", pool=self.pool_type, worker_id=self.worker_id, capacity=self.capacity)
         try:
             await self._consume_loop()
         finally:
             if self._heartbeat:
                 await self._heartbeat.stop()
+            if self._healthz:
+                await self._healthz.stop()
             if self._redis_main:
                 await self._redis_main.aclose()
             if self._redis_block:
