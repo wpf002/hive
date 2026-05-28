@@ -9,12 +9,18 @@
 # tsx-runtime pattern, so duplicating per-service buys us nothing except more
 # files to keep in sync. The SERVICE build arg selects which workspace's dev
 # script gets invoked at runtime.
-ARG NODE_VERSION=20.16.0
+# Node must be >=20.19 / >=22.12 for Prisma 7; pin a current 22 LTS.
+ARG NODE_VERSION=22.14.0
 
 # --- deps stage: cache the full workspace install ---
 FROM node:${NODE_VERSION}-bookworm-slim AS deps
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+# Prisma's query engine needs openssl; bookworm-slim ships without it.
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.5.0 --activate
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY apps ./apps
 COPY packages ./packages
@@ -36,15 +42,19 @@ ENV NODE_ENV=production \
     SERVICE=${SERVICE} \
     PNPM_HOME=/pnpm
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.5.0 --activate
 # Bring the fully-installed workspace from the build stage so we don't re-install.
 COPY --from=build /app /app
 
-# Pick a port reasonable for each service. fly.toml's `internal_port` should
-# match. Defaults to 4000 for apps/api; override at run time via PORT.
-ENV PORT=4000
+# PORT defaults to 4000 (set in the ENV block above); fly.toml's `internal_port`
+# should match, or override PORT at run time for non-4000 services.
 
-# We launch via the workspace's `start` script if it exists, otherwise `dev`
-# under tsx. apps/api & friends define `start`; some thinner services only
-# expose `dev` which is fine for now.
-CMD ["sh", "-c", "pnpm --filter $(node -e \"const p=require('/app/${SERVICE}/package.json');process.stdout.write(p.name)\") run start || pnpm --filter $(node -e \"const p=require('/app/${SERVICE}/package.json');process.stdout.write(p.name)\") run dev"]
+# Launch the service via its `dev` script (tsx for backends, `next dev` for the
+# UI). The dev scripts use `--env-file-if-exists`, so the absent in-container
+# .env is a no-op and Fly's injected env vars are used directly. (No `next build`
+# / tsc step in this image by design — the scaffold runs the tsx/next dev path.)
+CMD ["sh", "-c", "pnpm --filter $(node -e \"const p=require('/app/${SERVICE}/package.json');process.stdout.write(p.name)\") run dev"]
