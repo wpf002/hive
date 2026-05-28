@@ -21,12 +21,19 @@ primary_region = "ord"
 [build.args]
   SERVICE = "apps/api"
 
+# Run pending Prisma migrations before the new version takes traffic. Fly runs
+# this in a temporary machine on the private network (so the private-only
+# DATABASE_URL resolves) and aborts the deploy if it exits non-zero. `migrate
+# deploy` is idempotent — a no-op when the DB is already current.
+[deploy]
+  release_command = "pnpm --filter @hive/db migrate:deploy"
+
 [env]
   NODE_ENV       = "production"
   API_PORT       = "4000"
   HIVE_ENV_LABEL = "production"
   HIVE_STORAGE_PROVIDER     = "s3"
-  HIVE_ARTIFACT_S3_BUCKET   = "hive-artifacts"
+  HIVE_ARTIFACT_S3_BUCKET   = "hive-artifacts-prod"
   HIVE_ARTIFACT_S3_ENDPOINT = "https://fly.storage.tigris.dev"
   HIVE_ARTIFACT_S3_REGION   = "auto"
   HIVE_KMS_PROVIDER = "static"  # Fly has no managed KMS; AWS deploys use 'aws'.

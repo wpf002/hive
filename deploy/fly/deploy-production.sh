@@ -53,27 +53,25 @@ verify_healthz() {
 
 # --- 1. migrate ------------------------------------------------------------
 if [ "${SKIP_MIGRATE:-0}" != "1" ]; then
-  echo "▶ [1/13] migrating production database (one-shot container) ..."
-  (cd "$ROOT" && flyctl deploy --config "$FLY_DIR/fly.migrate.toml" --remote-only) \
-    || die "migration failed" "flyctl logs -a hive-migrate; restore from snapshot if schema is half-applied (see GO_LIVE_RUNBOOK gate 3)"
-  echo "  · verifying _prisma_migrations ..."
-  flyctl postgres connect -a hive-pg -c \
-    'SELECT count(*) AS applied FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;' \
-    || echo "  ⚠ could not auto-verify migration count — check manually"
+  echo "▶ [1/13] (migrations run automatically as the api's release_command on deploy) ..."
 fi
 
-# --- 2. seed ---------------------------------------------------------------
-if [ "${SKIP_SEED:-0}" != "1" ]; then
-  echo "▶ [2/13] seeding (idempotent) ..."
-  flyctl ssh console -a "$API_APP" -C "pnpm --filter @hive/api seed" \
-    || die "seed failed" "the API image must be deployed first if this is a cold start — set SKIP_SEED=1, deploy api, then re-run seed"
-fi
-
-# --- 3-4. api + verify -----------------------------------------------------
-echo "▶ [3/13] api ..."
+# --- 2-4. api (release_command migrates first) + verify --------------------
+echo "▶ [2/13] api — release_command applies pending migrations, then deploys ..."
 deploy_cfg api
+echo "▶ [3/13] verify _prisma_migrations ..."
+flyctl postgres connect -a hive-pg -c \
+  'SELECT count(*) AS applied FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;' \
+  || echo "  ⚠ could not auto-verify migration count — check manually (release_command output is in the api deploy log)"
 echo "▶ [4/13] verify api /healthz ..."
 verify_healthz "$API_APP"
+
+# --- seed (idempotent) — needs the api machine, which now exists -----------
+if [ "${SKIP_SEED:-0}" != "1" ]; then
+  echo "▶ seeding (idempotent) ..."
+  flyctl ssh console -a "$API_APP" -C "pnpm --filter @hive/api seed" \
+    || die "seed failed" "inspect: flyctl logs -a $API_APP ; re-run is safe (seed is idempotent)"
+fi
 
 # --- 5-8. control plane + verify ------------------------------------------
 echo "▶ [5-7/13] dispatcher, scheduler, session-sweeper ..."

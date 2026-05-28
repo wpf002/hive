@@ -1,3 +1,8 @@
+# OPTIONAL fallback. The default path runs migrations via the api app's
+# [deploy] release_command (see deploy/fly/api.fly.toml + deploy-production.sh),
+# which needs no separate app. Use this only if you want migrations decoupled
+# from the api deploy — you must `flyctl apps create hive-migrate` first.
+#
 # One-shot Prisma migration task.
 #
 #   flyctl deploy --config deploy/fly/fly.migrate.toml

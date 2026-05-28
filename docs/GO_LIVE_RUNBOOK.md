@@ -43,15 +43,17 @@ app was created wrong, `flyctl apps destroy <app>` and re-run `provision.sh`.
 
 ## 3. Database initialization ⏱ 15 min
 
-1. Attach the DB to the migrate app if needed:
-   `flyctl postgres attach hive-pg --app hive-migrate`
-2. `flyctl deploy --config deploy/fly/fly.migrate.toml` (runs `migrate deploy`, exits).
-3. Verify: `flyctl postgres connect -a hive-pg -c 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;'`
-   — expect the full migration count (10 as of Phase 6).
-4. Seed (after the API image is deployed in step 4 if this is a true cold start;
-   otherwise the migrate app can't seed — seed runs on hive-api):
+Migrations run **automatically** as the api app's `[deploy] release_command`
+when you deploy the API in section 4 (Fly runs it on the private network, where
+the private-only `DATABASE_URL` resolves, and aborts the deploy if it fails). So
+this section is really just verification + seed, done right after the api deploy:
+
+1. Verify: `flyctl postgres connect -a hive-pg -c 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;'`
+   — expect the full migration count (10 as of Phase 6). The migration output is
+   also in the api deploy log.
+2. Seed (the api machine now exists; `deploy-production.sh` does this for you):
    `flyctl ssh console -a hive-api -C "pnpm --filter @hive/api seed"`
-5. `flyctl postgres connect -a hive-pg -c 'SELECT email, role FROM "User" WHERE role='"'"'admin'"'"';'`
+3. `flyctl postgres connect -a hive-pg -c 'SELECT email, role FROM "User" WHERE role='"'"'admin'"'"';'`
 
 ✅ GATE: `SELECT count(*) FROM "BotTemplate"` returns **30+**, and the admin user
 exists.
