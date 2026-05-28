@@ -25,11 +25,13 @@ command -v flyctl >/dev/null 2>&1 || { echo "✗ flyctl not found" >&2; exit 1; 
 [ -f "$ENV_FILE" ] || { echo "✗ env file not found: $ENV_FILE" >&2; exit 1; }
 [ -f "$MANIFEST" ] || { echo "✗ manifest not found: $MANIFEST" >&2; exit 1; }
 
-# Load the env file into this shell. `set -a` auto-exports; we strip a leading
-# `export ` so both styles work.
+# Load the env file into this shell. `set -a` auto-exports every assignment, and
+# `source` natively handles both `KEY=val` and `export KEY=val` lines. (Do NOT
+# use `source <(...)` here — process substitution does not reliably populate the
+# parent shell across bash versions.)
 set -a
 # shellcheck disable=SC1090
-source <(sed -E 's/^[[:space:]]*export[[:space:]]+//' "$ENV_FILE")
+source "$ENV_FILE"
 set +a
 
 # Pull a list ($2) for a service ($1) from the manifest, tolerating missing keys.
