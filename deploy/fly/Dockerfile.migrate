@@ -1,0 +1,29 @@
+# One-shot migration image. Builds the workspace, generates the Prisma client,
+# then runs `prisma migrate deploy` and EXITS. Deployed via fly.migrate.toml as
+# a release task before the API takes traffic (see deploy/fly/deploy-production.sh).
+#
+#   flyctl deploy --config deploy/fly/fly.migrate.toml
+#
+# DATABASE_URL must be set on the hive-migrate app (it's attached during
+# provision.sh, or copy it from hive-api's secrets).
+ARG NODE_VERSION=20.16.0
+
+FROM node:${NODE_VERSION}-bookworm-slim AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/api ./apps/api
+RUN pnpm install --frozen-lockfile --filter @hive/db... \
+ || pnpm install --frozen-lockfile
+RUN pnpm --filter @hive/db generate
+
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+COPY --from=build /app /app
+
+# `migrate deploy` applies all pending migrations and is a no-op when the DB is
+# already up to date — safe to run on every deploy. Then the container exits 0.
+CMD ["pnpm", "--filter", "@hive/db", "migrate:deploy"]

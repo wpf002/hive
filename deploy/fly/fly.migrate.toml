@@ -1,0 +1,35 @@
+# One-shot Prisma migration task.
+#
+#   flyctl deploy --config deploy/fly/fly.migrate.toml
+#
+# Runs `prisma migrate deploy` against the production database and exits. The
+# `release_command` runs to completion before any machine is started; we also
+# keep no [http_service] and a tiny VM since this app does no serving.
+#
+# DATABASE_URL must be set on this app first. Easiest path (run once):
+#   flyctl postgres attach hive-pg --app hive-migrate
+# or copy hive-api's value:
+#   DB=$(flyctl secrets list -a hive-api --json | jq -r '.[]|select(.Name=="DATABASE_URL").Value')
+#   flyctl secrets set -a hive-migrate DATABASE_URL="$DB"
+#
+# After it succeeds, verify in psql (deploy-production.sh does this):
+#   SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL;
+
+app = "hive-migrate"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile.migrate"
+
+[env]
+  NODE_ENV = "production"
+
+# release_command runs the migration; the (empty) app process then just exits.
+# We run the migration as the machine command instead of a long-lived service.
+[processes]
+  migrate = "pnpm --filter @hive/db migrate:deploy"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "512mb"

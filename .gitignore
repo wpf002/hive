@@ -49,3 +49,7 @@ workers/**/downloads/
 # service started — most often apps/api/data/artifacts. Glob catches both).
 **/data/artifacts/
 data/artifacts/
+
+# Phase 6 production secrets (never commit)
+deploy/fly/.secrets.env
+deploy/fly/*.secrets.env

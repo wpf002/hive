@@ -14,6 +14,7 @@
     "typecheck": "pnpm -r typecheck",
     "verify": "pnpm -r typecheck && pnpm -r lint",
     "db:migrate": "pnpm --filter @hive/db migrate",
+    "db:migrate:deploy": "pnpm --filter @hive/db migrate:deploy",
     "db:generate": "pnpm --filter @hive/db generate",
     "db:studio": "pnpm --filter @hive/db studio",
     "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
