@@ -23,6 +23,10 @@ export async function EnvLabelPill() {
     // API unreachable — render nothing rather than blocking the layout.
   }
   if (!label) return null;
+  // Phase 6b.3: production is the default visual state — no pill. We only call
+  // out non-production environments (staging/dev/etc.) so an operator notices
+  // when they're NOT in prod.
+  if (label.toLowerCase().includes('prod')) return null;
   return (
     <span
       className={`mr-3 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${colorFor(label)}`}

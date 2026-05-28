@@ -1,12 +1,17 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
+
+const VERSION = process.env.NEXT_PUBLIC_HIVE_VERSION ?? '0.1.0';
+const REGION = process.env.NEXT_PUBLIC_HIVE_REGION ?? 'local';
 
 export default function LoginPage() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get('next') || '/dashboard';
+  const justReset = params.get('reset') === '1';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,15 +34,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-hive-bg bg-hex-grid p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-hive-bg bg-hex-grid p-4">
       <form
         onSubmit={submit}
-        className="w-full max-w-sm space-y-4 rounded-lg border border-hive-border bg-hive-surface p-6"
+        className="w-full max-w-sm space-y-4 rounded-lg border border-hive-border bg-hive-surface p-6 shadow-xl"
       >
-        <div>
-          <h1 className="font-mono text-2xl font-bold text-honey-500">HIVE</h1>
-          <p className="font-mono text-xs text-hive-subtle">Sign in to continue</p>
+        <div className="flex flex-col items-center gap-2 text-center">
+          {/* Hive logo — hexagon mark + wordmark. */}
+          <svg width="44" height="44" viewBox="0 0 24 24" aria-hidden className="text-honey-500">
+            <path
+              fill="currentColor"
+              d="M12 2 21 7v10l-9 5-9-5V7l9-5Zm0 4.2L7 9.1v5.8l5 2.9 5-2.9V9.1l-5-2.9Z"
+            />
+          </svg>
+          <h1 className="font-mono text-2xl font-bold tracking-widest text-honey-500">HIVE</h1>
+          <p className="font-mono text-xs text-hive-subtle">Sign in to your account</p>
         </div>
+        {justReset && (
+          <div className="rounded border border-honey-500/30 bg-honey-500/10 p-2 font-mono text-xs text-hive-text">
+            Password updated. Sign in with your new password.
+          </div>
+        )}
         <label className="block">
           <span className="font-mono text-[11px] uppercase text-hive-subtle">Email</span>
           <input
@@ -72,7 +89,18 @@ export default function LoginPage() {
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
+        <div className="text-center">
+          <Link
+            href="/forgot-password"
+            className="font-mono text-[11px] text-hive-subtle underline-offset-2 hover:text-honey-400 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
       </form>
+      <footer className="mt-4 font-mono text-[10px] text-hive-subtle">
+        Hive v{VERSION} · region {REGION}
+      </footer>
     </div>
   );
 }

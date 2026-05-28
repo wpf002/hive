@@ -180,6 +180,7 @@ model User {
   createdAt    DateTime  @default(now())
   lastLoginAt  DateTime?
   sessions     Session[]
+  resetTokens  ResetToken[]
   auditEntries AuditLog[]
 }
 
@@ -192,6 +193,24 @@ model Session {
   createdAt DateTime @default(now())
   ipAddress String?
   userAgent String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============ Password reset (Phase 6b) ============
+
+// Single-use password reset token. We store only the SHA-256 hash of the raw
+// token (same pattern as Session.tokenHash) so a DB leak can't be used to reset
+// passwords. `usedAt` is set when consumed so a token can't be replayed.
+model ResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
   @@index([expiresAt])

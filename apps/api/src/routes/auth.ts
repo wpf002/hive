@@ -12,6 +12,23 @@ import {
   revokeSession,
 } from '../lib/sessions.js';
 import { writeAuditLog } from '../lib/audit.js';
+import { emailProvider } from '../lib/email.js';
+import {
+  buildResetLink,
+  consumeResetToken,
+  findValidResetToken,
+  issueResetToken,
+} from '../lib/reset-tokens.js';
+import { env } from '../env.js';
+
+const RequestPasswordResetBody = z.object({
+  email: z.string().email(),
+});
+
+const ResetPasswordWithTokenBody = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8),
+});
 
 const RegisterBody = z.object({
   email: z.string().email(),
@@ -129,6 +146,66 @@ export async function authRoutes(app: FastifyInstance) {
     await revokeAllSessionsForUser(user.id);
     await writeAuditLog(req, { userId: user.id, action: 'auth.password_changed' });
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return reply.send({ ok: true });
+  });
+
+  // -------------------- password reset (Phase 6b) --------------------
+  // Always returns 200 regardless of whether the email exists — this prevents
+  // account enumeration. The real work (token + email) only happens when the
+  // user is found.
+  app.post('/api/auth/request-password-reset', async (req, reply) => {
+    const body = RequestPasswordResetBody.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    if (user) {
+      try {
+        const { token } = await issueResetToken(user.id);
+        const link = buildResetLink(env.HIVE_PUBLIC_APP_URL, token);
+        await emailProvider().send({
+          to: user.email,
+          subject: 'Reset your Hive password',
+          text: [
+            `Hi ${user.displayName},`,
+            '',
+            'We received a request to reset your Hive password. Use the link below',
+            'within the next hour to choose a new one:',
+            '',
+            link,
+            '',
+            "If you didn't request this, you can safely ignore this email — your",
+            'password will not change.',
+          ].join('\n'),
+          html: [
+            `<p>Hi ${user.displayName},</p>`,
+            '<p>We received a request to reset your Hive password. Use the button',
+            'below within the next hour to choose a new one:</p>',
+            `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#f59e0b;color:#111;border-radius:6px;text-decoration:none;font-weight:600">Reset password</a></p>`,
+            `<p style="color:#666;font-size:13px">Or paste this link into your browser:<br><a href="${link}">${link}</a></p>`,
+            "<p style=\"color:#666;font-size:13px\">If you didn't request this, you can safely ignore this email.</p>",
+          ].join(''),
+        });
+        await writeAuditLog(req, { userId: user.id, action: 'auth.password_reset_requested' });
+      } catch (err) {
+        // Never leak failure back to the caller (enumeration); log it server-side.
+        req.log.error({ err, email: body.email }, 'password_reset_email_failed');
+      }
+    }
+    return reply.send({ ok: true });
+  });
+
+  app.post('/api/auth/reset-password', async (req, reply) => {
+    const body = ResetPasswordWithTokenBody.parse(req.body);
+    const found = await findValidResetToken(body.token);
+    if (!found) {
+      return reply
+        .code(400)
+        .send({ error: { code: 'invalid_token', message: 'reset link is invalid or has expired' } });
+    }
+    const newHash = await hashPassword(body.newPassword);
+    await prisma.user.update({ where: { id: found.userId }, data: { passwordHash: newHash } });
+    await consumeResetToken(found.id);
+    // Invalidate every existing session so a stolen session can't outlive the reset.
+    await revokeAllSessionsForUser(found.userId);
+    await writeAuditLog(req, { userId: found.userId, action: 'password_reset_completed' });
     return reply.send({ ok: true });
   });
 

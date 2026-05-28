@@ -30,6 +30,18 @@ const Env = z.object({
   HIVE_KMS_STATIC_RETIRED_KEYS: z.string().optional(),
   // Optional: used to construct presigned URLs (defaults to localhost:API_PORT).
   API_BASE_URL: z.string().optional(),
+  // Phase 6b: transactional email (password reset, audit alerts).
+  // 'log' (default) never sends real mail; 'resend' uses the Resend REST API.
+  HIVE_EMAIL_PROVIDER: z.enum(['log', 'resend']).default('log'),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+  // Public origin of the UI, used to build the password-reset link. Defaults to
+  // the local dev UI port; set to https://hive.<yourdomain> in production.
+  HIVE_PUBLIC_APP_URL: z.string().default('http://localhost:3001'),
+  // Phase 6b (optional): if set, critical audit events email this address. The
+  // session-sweeper service runs the polling job; the API tolerates the var so
+  // env validation stays uniform across services.
+  HIVE_AUDIT_ALERT_EMAIL: z.string().optional(),
 });
 
 export const env = Env.parse(process.env);

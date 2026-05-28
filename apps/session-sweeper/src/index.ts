@@ -9,6 +9,7 @@ import Fastify from 'fastify';
 import type { LoggerOptions } from 'pino';
 import { prisma } from '@hive/db';
 import { env } from './env.js';
+import { startAuditAlerts } from './audit-alerts.js';
 
 const loggerOptions: LoggerOptions = {
   level: env.LOG_LEVEL,
@@ -72,6 +73,8 @@ try {
   app.log.info({ port: env.SESSION_SWEEPER_PORT, intervalSeconds: env.SESSION_SWEEP_INTERVAL_S }, 'started');
   void sweep(); // run once at boot so the healthcheck shows a recent run quickly
   setInterval(() => void sweep(), env.SESSION_SWEEP_INTERVAL_S * 1000);
+  // Phase 6b: audit alerting (no-op unless HIVE_AUDIT_ALERT_EMAIL is set).
+  startAuditAlerts(app.log);
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');
   process.exit(1);

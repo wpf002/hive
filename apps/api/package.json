@@ -25,6 +25,7 @@
     "@fastify/cors": "^9.0.0",
     "@hive/crypto": "workspace:*",
     "@hive/db": "workspace:*",
+    "@hive/email": "workspace:*",
     "@hive/kms": "workspace:*",
     "@hive/shared": "workspace:*",
     "@hive/storage": "workspace:*",
