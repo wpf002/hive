@@ -2,6 +2,9 @@
 
 Distributed bot orchestration platform. One control plane, eleven worker pools, unlimited bot templates, scales from a single Mac to a cloud fleet.
 
+> **Production:** `https://hive.<yourdomain>` · status: `https://hive.<yourdomain>/status`
+> _(set during go-live — see [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md). Replace `<yourdomain>` with the real host once deployed.)_
+
 ```
               ┌─────────────────────────────────────┐
               │   UI (Next.js, dark hex aesthetic)  │
