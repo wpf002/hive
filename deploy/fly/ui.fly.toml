@@ -9,6 +9,8 @@ primary_region = "ord"
   # Empty = the browser uses same-origin requests, proxied to the API by
   # next.config.js. Baked into the client bundle at build time.
   NEXT_PUBLIC_API_BASE = ""
+  # Next bakes rewrites() at build time — the proxy target must be set here.
+  API_PROXY_TARGET = "https://hive-api.fly.dev"
 
 [env]
   NODE_ENV       = "production"
@@ -16,20 +18,20 @@ primary_region = "ord"
   HIVE_ENV_LABEL = "production"
   # Server-side proxy target: Next forwards /api/* and /healthz here over Fly's
   # private network. Keeps session cookies first-party to the UI host.
-  API_PROXY_TARGET = "http://hive-api.flycast:4000"
+  API_PROXY_TARGET = "https://hive-api.fly.dev"
 
 [http_service]
   internal_port        = 3001
   force_https          = true
-  auto_stop_machines   = true   # UI is stateless; fine to spin down idle.
-  auto_start_machines  = true
-  min_machines_running = 0
+  auto_stop_machines   = false  # keep warm: login must be responsive + the
+  auto_start_machines  = true   # health check needs a running machine to pass.
+  min_machines_running = 1
 
 [[http_service.checks]]
-  grace_period = "20s"
+  grace_period = "30s"          # next start + first request needs headroom
   interval     = "30s"
   method       = "GET"
-  path         = "/"
+  path         = "/login"       # 200 without auth ('/' 307-redirects to /login)
   protocol     = "http"
   timeout      = "10s"
 

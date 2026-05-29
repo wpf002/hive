@@ -34,12 +34,15 @@ FROM deps AS build
 ARG SERVICE=apps/api
 # NEXT_PUBLIC_* are inlined at build time; '' keeps the UI same-origin (proxy).
 ARG NEXT_PUBLIC_API_BASE=""
+# Next bakes rewrites() at build time, so the proxy target must be present here
+# (not just at runtime). It's only stored as a string — no connection is made.
+ARG API_PROXY_TARGET="http://localhost:4000"
 ENV NODE_ENV=production
 RUN pnpm --filter @hive/db generate
 # Produce a production Next build for the UI so runtime is `next start` (lean),
 # not `next dev` (memory-heavy). No-op for backend services.
 RUN if [ "$SERVICE" = "apps/ui" ]; then \
-      NEXT_PUBLIC_API_BASE="$NEXT_PUBLIC_API_BASE" pnpm --filter @hive/ui build; \
+      NEXT_PUBLIC_API_BASE="$NEXT_PUBLIC_API_BASE" API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @hive/ui build; \
     fi
 
 # --- runtime stage ---

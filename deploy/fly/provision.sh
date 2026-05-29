@@ -65,18 +65,31 @@ else
     --volume-size 10
 fi
 
-echo "▶ Step 3/4 — attaching Postgres to control-plane services ..."
-for app in "${PG_CONSUMERS[@]}"; do
-  # `flyctl postgres attach` is idempotent-ish: it errors if DATABASE_URL is
-  # already set. Detect that and skip.
-  if flyctl secrets list --app "$app" --json 2>/dev/null | grep -q '"Name":[[:space:]]*"DATABASE_URL"'; then
-    echo "  = $app already has DATABASE_URL"
-  else
-    echo "  + attaching $PG_APP -> $app"
-    flyctl postgres attach "$PG_APP" --app "$app" || \
-      echo "  ⚠ attach failed for $app — re-run manually: flyctl postgres attach $PG_APP --app $app"
-  fi
-done
+echo "▶ Step 3/4 — attaching Postgres (ONE shared database for all services) ..."
+# IMPORTANT: `flyctl postgres attach` creates a SEPARATE database + user per app
+# by default (hive_api, hive_dispatcher, ...). Hive needs ALL services on the
+# SAME database (migrations + seed live in one place). So we attach only to the
+# API, then copy that exact DATABASE_URL to every other consumer.
+API_APP_FOR_DB="hive-api"
+if flyctl secrets list --app "$API_APP_FOR_DB" --json 2>/dev/null | grep -q '"Name":[[:space:]]*"DATABASE_URL"'; then
+  echo "  = $API_APP_FOR_DB already has DATABASE_URL"
+else
+  echo "  + attaching $PG_APP -> $API_APP_FOR_DB"
+  flyctl postgres attach "$PG_APP" --app "$API_APP_FOR_DB" || \
+    echo "  ⚠ attach failed — re-run: flyctl postgres attach $PG_APP --app $API_APP_FOR_DB"
+fi
+# Read the API's DATABASE_URL from the running app and fan it out unchanged.
+SHARED_DB="$(flyctl ssh console -a "$API_APP_FOR_DB" -C "node -e 'process.stdout.write(process.env.DATABASE_URL||\"\")'" 2>/dev/null | grep -oE 'postgres://[^ ]+' | head -1 | tr -d '\r' || true)"
+if [ -z "$SHARED_DB" ]; then
+  echo "  ⚠ couldn't read DATABASE_URL from $API_APP_FOR_DB yet (deploy the API first, then re-run this step)."
+else
+  for app in "${PG_CONSUMERS[@]}"; do
+    [ "$app" = "$API_APP_FOR_DB" ] && continue
+    echo "  + pointing $app at the shared database"
+    flyctl secrets set --app "$app" --stage DATABASE_URL="$SHARED_DB" >/dev/null 2>&1 || \
+      echo "  ⚠ failed to set DATABASE_URL on $app"
+  done
+fi
 
 echo "▶ Step 4/4 — MANUAL STEPS (cannot be scripted) ----------------------------"
 cat <<EOF
