@@ -10,6 +10,7 @@
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "seed:demo": "tsx --env-file-if-exists=../../.env src/seed-demo.ts",
     "encrypt-existing-secrets": "tsx --env-file-if-exists=../../.env src/scripts/encrypt-existing-secrets.ts",
     "upgrade-envelope-v1-to-v2": "tsx --env-file-if-exists=../../.env src/scripts/upgrade-envelope-v1-to-v2.ts",
     "kms:rotate": "tsx --env-file-if-exists=../../.env src/scripts/kms-rotate.ts",
