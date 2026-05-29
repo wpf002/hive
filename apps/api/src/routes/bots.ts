@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 import { encryptBotConfig, maskBotConfig } from '../lib/secrets.js';
 
 type TemplateForSecrets = { configSchema: unknown };
@@ -42,7 +42,7 @@ const Patch = z.object({
 });
 
 export async function botRoutes(app: FastifyInstance) {
-  app.post('/api/bots', { preHandler: requireAuth('api') }, async (req, reply) => {
+  app.post('/api/bots', { preHandler: requireRole('admin') }, async (req, reply) => {
     const body = Create.parse(req.body);
     const template = await prisma.botTemplate.findUnique({ where: { id: body.templateId } });
     if (!template) {
@@ -93,7 +93,8 @@ export async function botRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     '/api/bots/:id',
-    { preHandler: requireAuth('api') },
+    // Editing a bot defines what runs on workers — admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const body = Patch.parse(req.body);
       const data: Prisma.BotUpdateInput = {
@@ -132,7 +133,8 @@ export async function botRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     '/api/bots/:id',
-    { preHandler: requireAuth('api') },
+    // Deleting a bot mutates the executable fleet — admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       await prisma.bot.delete({ where: { id: req.params.id } });
       return reply.code(204).send();

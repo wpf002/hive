@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import cronParser from 'cron-parser';
 import { prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 
 const Create = z.object({
   botId: z.string().min(1),
@@ -29,7 +29,7 @@ function validateCron(cron: string): string | null {
 }
 
 export async function scheduleRoutes(app: FastifyInstance) {
-  app.post('/api/schedules', { preHandler: requireAuth('api') }, async (req, reply) => {
+  app.post('/api/schedules', { preHandler: requireRole('admin') }, async (req, reply) => {
     const body = Create.parse(req.body);
     const err = validateCron(body.cron);
     if (err) {
@@ -73,7 +73,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    { preHandler: requireAuth('api') },
+    // Schedules auto-dispatch bots — creating/editing them is admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const body = Patch.parse(req.body);
       const existing = await prisma.schedule.findUnique({ where: { id: req.params.id } });
@@ -99,7 +100,8 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    { preHandler: requireAuth('api') },
+    // Removing a schedule mutates the execution fleet — admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       await prisma.schedule.delete({ where: { id: req.params.id } });
       return reply.code(204).send();

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useMe } from '@/lib/useMe';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PoolBadge } from '@/components/PoolBadge';
 import { LiveLogStream } from '@/components/LiveLogStream';
@@ -23,6 +24,7 @@ const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const { isAdmin } = useMe();
   const job = useQuery<Job>({
     queryKey: ['job', id],
     queryFn: () => api.get<Job>(`/api/jobs/${id}`),
@@ -70,14 +72,14 @@ export default function JobDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          {(j.status === 'running' || j.status === 'queued') && (
+          {isAdmin && (j.status === 'running' || j.status === 'queued') && (
             <button
               type="button"
               onClick={cancel}
               className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
             >Cancel</button>
           )}
-          {j.status === 'failed' && (
+          {isAdmin && j.status === 'failed' && (
             <button
               type="button"
               onClick={async () => {

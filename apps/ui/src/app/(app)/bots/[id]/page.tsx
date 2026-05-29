@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useMe } from '@/lib/useMe';
 import { PoolBadge } from '@/components/PoolBadge';
 import { StatusBadge } from '@/components/StatusBadge';
 import { RunBotDialog } from '@/components/RunBotDialog';
@@ -17,6 +18,7 @@ export default function BotDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+  const { isAdmin } = useMe();
   const bot = useQuery<Bot>({
     queryKey: ['bot', id],
     queryFn: () => api.get<Bot>(`/api/bots/${id}`),
@@ -81,19 +83,22 @@ export default function BotDetailPage() {
           </div>
           <div className="font-mono text-xs text-hive-subtle">{bot.data.template?.name}</div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setRunOpen(true)}
-            className="rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
-          >Run</button>
-          <button
-            onClick={remove}
-            className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-          >Delete</button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRunOpen(true)}
+              className="rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
+            >Run</button>
+            <button
+              onClick={remove}
+              className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+            >Delete</button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {isAdmin && (
         <div className="space-y-3 rounded-lg border border-hive-border bg-hive-surface p-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Edit</h2>
@@ -155,6 +160,7 @@ export default function BotDetailPage() {
             className="rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
           >Save</button>
         </div>
+        )}
 
         <div className="rounded-lg border border-hive-border bg-hive-surface">
           <div className="border-b border-hive-border px-4 py-3 font-semibold">Run History (last 10)</div>

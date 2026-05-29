@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useMe } from '@/lib/useMe';
 import { PromptEditor } from '@/components/PromptEditor';
 import { LiveLogStream } from '@/components/LiveLogStream';
 import { StreamingResponse } from '@/components/StreamingResponse';
@@ -59,6 +60,7 @@ function fmtCents(c: number): string {
 
 export default function AiConsolePage() {
   const qc = useQueryClient();
+  const { isAdmin } = useMe();
   const templates = useQuery<BotTemplate[]>({
     queryKey: ['templates'],
     queryFn: () => api.get<BotTemplate[]>('/api/templates'),
@@ -295,10 +297,16 @@ export default function AiConsolePage() {
               these for ad-hoc questions, and the controls were just noise. */}
 
           {runError && <div className="font-mono text-xs text-red-400">{runError}</div>}
+          {!isAdmin && (
+            <div className="font-mono text-xs text-hive-subtle">
+              Running prompts dispatches a job to a worker — this is restricted to admins.
+            </div>
+          )}
 
           <button
             onClick={run}
-            disabled={running}
+            disabled={running || !isAdmin}
+            title={!isAdmin ? 'Admin role required to run jobs' : undefined}
             className="rounded bg-honey-500 px-4 py-2 text-sm font-semibold text-black hover:bg-honey-400 disabled:opacity-60"
           >
             {running ? 'Starting…' : isMulti ? `Run · ${selected.size} providers` : 'Run'}

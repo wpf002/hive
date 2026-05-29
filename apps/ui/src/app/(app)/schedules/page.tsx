@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useMe } from '@/lib/useMe';
 import { fmtRelative, fmtDateTime } from '@/lib/format';
 import { PoolBadge } from '@/components/PoolBadge';
 import { CreateScheduleDialog } from '@/components/CreateScheduleDialog';
@@ -9,6 +10,7 @@ import type { Schedule } from '@/lib/types';
 
 export default function SchedulesPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useMe();
   const [createOpen, setCreateOpen] = useState(false);
   const schedules = useQuery<Schedule[]>({
     queryKey: ['schedules'],
@@ -33,12 +35,14 @@ export default function SchedulesPage() {
           <h1 className="text-2xl font-bold">Schedules</h1>
           <p className="mt-1 font-mono text-xs text-hive-subtle">CRON-DRIVEN BOT RUNS</p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="shrink-0 rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
-        >
-          + New Schedule
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="shrink-0 rounded bg-honey-500 px-3 py-1.5 text-sm font-semibold text-black hover:bg-honey-400"
+          >
+            + New Schedule
+          </button>
+        )}
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
@@ -70,24 +74,34 @@ export default function SchedulesPage() {
                   {s.lastRunAt ? fmtRelative(s.lastRunAt) : '—'}
                 </td>
                 <td className="px-4 py-2">
-                  <button
-                    onClick={() => toggle(s)}
-                    className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
-                      s.enabled
-                        ? 'border-emerald-500/30 text-emerald-400'
-                        : 'border-zinc-500/30 text-zinc-400'
-                    }`}
-                  >
-                    {s.enabled ? 'on' : 'off'}
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => toggle(s)}
+                      className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                        s.enabled
+                          ? 'border-emerald-500/30 text-emerald-400'
+                          : 'border-zinc-500/30 text-zinc-400'
+                      }`}
+                    >
+                      {s.enabled ? 'on' : 'off'}
+                    </button>
+                  ) : (
+                    <span className={`rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                      s.enabled ? 'border-emerald-500/30 text-emerald-400' : 'border-zinc-500/30 text-zinc-400'
+                    }`}>
+                      {s.enabled ? 'on' : 'off'}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <button
-                    onClick={() => remove(s)}
-                    className="rounded border border-red-500/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
-                  >
-                    delete
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => remove(s)}
+                      className="rounded border border-red-500/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                    >
+                      delete
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

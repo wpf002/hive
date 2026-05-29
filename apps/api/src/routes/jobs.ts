@@ -20,7 +20,8 @@ const ListQuery = z.object({
 export async function jobRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
     '/api/bots/:id/run',
-    { preHandler: requireAuth('api') },
+    // Running a bot dispatches code to a worker — admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const body = RunBody.parse(req.body ?? {});
       const bot = await prisma.bot.findUnique({
@@ -125,7 +126,8 @@ export async function jobRoutes(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>(
     '/api/jobs/:id/cancel',
-    { preHandler: requireAuth('api') },
+    // Controlling job execution (stopping a running job) is admin-only.
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const job = await prisma.job.findUnique({ where: { id: req.params.id } });
       if (!job) return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
