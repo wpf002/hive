@@ -8,57 +8,57 @@ datasource db {
 
 // Bot template — a reusable recipe (e.g., "ESPN Scoreboard Scraper")
 model BotTemplate {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  poolType    String   // browser | scraper | rpa_desktop | discord | telegram | trading | monitor | mcp_host | ci_agent | task_runner | ai_agent
-  configSchema Json    // JSON Schema for params
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  poolType      String // browser | scraper | rpa_desktop | discord | telegram | trading | monitor | mcp_host | ci_agent | task_runner | ai_agent
+  configSchema  Json // JSON Schema for params
   defaultConfig Json
   // Phase 5b: optional dispatch-time placement. Shape: { region?: string; zone?: string }.
   // Null = no preference; bots based on this template route to the
   // `hive:pool:<pool>:any:any` stream by default.
-  affinity    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  bots        Bot[]
+  affinity      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  bots          Bot[]
 
   @@index([poolType])
 }
 
 // Bot — an instantiated template with concrete params
 model Bot {
-  id              String   @id @default(cuid())
-  templateId      String
-  template        BotTemplate @relation(fields: [templateId], references: [id])
-  name            String
-  config          Json
+  id               String      @id @default(cuid())
+  templateId       String
+  template         BotTemplate @relation(fields: [templateId], references: [id])
+  name             String
+  config           Json
   // Phase 5b: overrides template.affinity when set. Same shape: { region?, zone? }.
   // Null = inherit from template.
   affinityOverride Json?
-  enabled         Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  jobs            Job[]
-  schedules       Schedule[]
+  enabled          Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  jobs             Job[]
+  schedules        Schedule[]
 
   @@index([templateId])
 }
 
 // Job — a single execution of a bot
 model Job {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   botId       String
-  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
-  status      String   // queued | running | succeeded | failed | cancelled
-  priority    Int      @default(0)
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(3)
+  bot         Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  status      String // queued | running | succeeded | failed | cancelled
+  priority    Int       @default(0)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
   payload     Json
   result      Json?
   error       String?
   startedAt   DateTime?
   finishedAt  DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
   logs        JobLog[]
 
   @@index([status])
@@ -70,7 +70,7 @@ model JobLog {
   id        String   @id @default(cuid())
   jobId     String
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  level     String   // debug | info | warn | error
+  level     String // debug | info | warn | error
   message   String
   meta      Json?
   timestamp DateTime @default(now())
@@ -79,45 +79,45 @@ model JobLog {
 }
 
 model Schedule {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   botId     String
-  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
-  cron      String   // cron expression
-  enabled   Boolean  @default(true)
+  bot       Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  cron      String // cron expression
+  enabled   Boolean   @default(true)
   lastRunAt DateTime?
   nextRunAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([nextRunAt, enabled])
 }
 
 model Worker {
-  id           String   @id @default(cuid())
-  poolType     String
-  hostname     String
+  id         String   @id @default(cuid())
+  poolType   String
+  hostname   String
   // Phase 5b: self-declared location for affinity-based routing. Single-host
   // setups leave these at the defaults and everything keeps working.
-  region       String   @default("local")
-  zone         String   @default("default")
-  status       String   // online | offline | draining
-  capacity     Int      @default(1)
-  activeJobs   Int      @default(0)
-  lastSeenAt   DateTime @default(now())
-  metadata     Json?
+  region     String   @default("local")
+  zone       String   @default("default")
+  status     String // online | offline | draining
+  capacity   Int      @default(1)
+  activeJobs Int      @default(0)
+  lastSeenAt DateTime @default(now())
+  metadata   Json?
 
   @@index([poolType, status])
   @@index([poolType, region, zone])
 }
 
 model AiUsage {
-  id        String   @id @default(cuid())
-  jobId     String?
-  provider  String   // claude | gpt | perplexity
-  model     String
+  id           String   @id @default(cuid())
+  jobId        String?
+  provider     String // claude | gpt | perplexity
+  model        String
   inputTokens  Int
   outputTokens Int
-  costCents Int
-  createdAt DateTime @default(now())
+  costCents    Int
+  createdAt    DateTime @default(now())
 
   @@index([provider, createdAt])
 }
@@ -142,11 +142,11 @@ model PaperTrade {
   jobId         String
   exchange      String
   symbol        String
-  side          String   // buy | sell
-  type          String   // market | limit
+  side          String // buy | sell
+  type          String // market | limit
   amount        Decimal  @db.Decimal(18, 8)
   price         Decimal? @db.Decimal(18, 8)
-  status        String   // filled | cancelled | failed
+  status        String // filled | cancelled | failed
   executedPrice Decimal? @db.Decimal(18, 8)
   createdAt     DateTime @default(now())
 
@@ -158,7 +158,7 @@ model TradeAudit {
   id        String   @id @default(cuid())
   jobId     String
   botId     String
-  mode      String   // paper | live
+  mode      String // paper | live
   action    String
   payload   Json
   result    Json
@@ -172,12 +172,12 @@ model TradeAudit {
 // ============ Auth (Phase 3c) ============
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
   passwordHash String
   displayName  String
-  role         String    @default("user") // admin | user
-  createdAt    DateTime  @default(now())
+  role         String       @default("user") // admin | user
+  createdAt    DateTime     @default(now())
   lastLoginAt  DateTime?
   sessions     Session[]
   resetTokens  ResetToken[]
@@ -221,12 +221,12 @@ model ResetToken {
 // Tracks every KEK that has wrapped DEKs in this database. Used by
 // `pnpm --filter @hive/api kms:rotate` to find which envelopes to re-wrap.
 model KmsKey {
-  id         String    @id @default(cuid())
-  keyId      String    @unique // provider-specific identifier (e.g., AWS KMS ARN, 'static:v1')
-  provider   String    // 'static' | 'aws'
-  status     String    // 'active' | 'retiring' | 'revoked'
-  createdAt  DateTime  @default(now())
-  retiredAt  DateTime?
+  id        String    @id @default(cuid())
+  keyId     String    @unique // provider-specific identifier (e.g., AWS KMS ARN, 'static:v1')
+  provider  String // 'static' | 'aws'
+  status    String // 'active' | 'retiring' | 'revoked'
+  createdAt DateTime  @default(now())
+  retiredAt DateTime?
 
   @@index([status])
 }

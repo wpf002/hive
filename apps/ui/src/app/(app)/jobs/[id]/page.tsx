@@ -201,8 +201,8 @@ function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
       </div>
       <div className="p-2">
         {isImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <a href={href} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={href}
               alt={artifact.filename}
