@@ -4,9 +4,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-const VERSION = process.env.NEXT_PUBLIC_HIVE_VERSION ?? '0.1.0';
-const REGION = process.env.NEXT_PUBLIC_HIVE_REGION ?? 'local';
-
 // useSearchParams() requires a Suspense boundary for static prerendering (next build).
 export default function LoginPage() {
   return (
@@ -107,9 +104,6 @@ function LoginForm() {
           </Link>
         </div>
       </form>
-      <footer className="mt-4 font-mono text-[10px] text-hive-subtle">
-        Hive v{VERSION} · region {REGION}
-      </footer>
     </div>
   );
 }
