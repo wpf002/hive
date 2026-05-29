@@ -1,11 +1,60 @@
 """HTTP Endpoint Monitor handler."""
 from __future__ import annotations
+import ipaddress
+import os
 import socket
+from urllib.parse import urlparse
 from typing import Any
 import httpx
 from hive_base import JobLogger
 
 DEFAULT_TIMEOUT_MS = 10_000
+
+# SSRF guard: by default, refuse to fetch URLs that resolve to private,
+# loopback, link-local (incl. the 169.254.169.254 cloud-metadata endpoint),
+# or otherwise non-public addresses. Operators who legitimately monitor
+# internal services can opt in with HIVE_MONITOR_ALLOW_INTERNAL=true.
+_ALLOW_INTERNAL = os.environ.get("HIVE_MONITOR_ALLOW_INTERNAL", "").lower() == "true"
+
+
+def _is_public_ip(ip_str: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _assert_public_url(url: str) -> None:
+    """Raise ValueError if `url` points at a non-public address (SSRF guard)."""
+    if _ALLOW_INTERNAL:
+        return
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"unsupported url scheme '{parsed.scheme}' (only http/https)")
+    host = parsed.hostname
+    if not host:
+        raise ValueError("url has no host")
+    # Resolve every address the host maps to; reject if ANY is non-public so a
+    # DNS name can't smuggle in an internal IP.
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except socket.gaierror as e:
+        raise ValueError(f"cannot resolve host '{host}': {e}") from e
+    addrs = {info[4][0] for info in infos}
+    for addr in addrs:
+        if not _is_public_ip(addr):
+            raise ValueError(
+                f"refusing to fetch '{host}' — resolves to non-public address {addr}. "
+                "Set HIVE_MONITOR_ALLOW_INTERNAL=true to allow internal targets."
+            )
 
 
 async def http_endpoint_monitor(config: dict[str, Any], joblog: JobLogger) -> dict[str, Any]:
@@ -24,12 +73,17 @@ async def http_endpoint_monitor(config: dict[str, Any], joblog: JobLogger) -> di
     check_body_contains = config.get("checkBodyContains")
     if check_body_contains is not None and not isinstance(check_body_contains, str):
         raise ValueError("checkBodyContains must be a string")
+    # Redirects are off by default: a public host could otherwise 3xx to an
+    # internal address and bypass the SSRF guard. Opt in per-job if needed.
+    follow_redirects = bool(config.get("followRedirects", False))
+
+    _assert_public_url(url)
 
     await joblog.info("http.request", url=url, method=method, expectedStatus=expected_status)
 
     t0 = _now_ms()
     try:
-        async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=timeout_s, follow_redirects=follow_redirects) as client:
             r = await client.request(method, url, headers=headers, content=body)
     except httpx.HTTPError as e:
         # Infrastructure error — re-raise so the worker retries/DLQs.

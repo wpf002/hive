@@ -3,9 +3,6 @@
 // session cookie first-party). Set NEXT_PUBLIC_API_BASE only to talk to a
 // cross-origin API directly (not needed with the proxy).
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
-// Legacy fallback so SSE keeps working while sessions roll out. Once you've
-// logged in once, the cookie takes precedence and this can be removed.
-const LEGACY_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';
 
 export class ApiError extends Error {
   status: number;
@@ -27,12 +24,9 @@ async function request<T>(
     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...((init?.headers as Record<string, string>) ?? {}),
   };
-  // Cookie auth is preferred. As a transition aid we still send the legacy
-  // bearer token if NEXT_PUBLIC_API_TOKEN is set, but only as fallback — the
-  // session cookie wins on the server.
-  if (LEGACY_TOKEN && !headers.Authorization) {
-    headers.Authorization = `Bearer ${LEGACY_TOKEN}`;
-  }
+  // Auth is carried entirely by the first-party session cookie (sent via
+  // credentials: 'include'). We never embed a bearer token in the browser
+  // bundle — a NEXT_PUBLIC_* token would be readable by anyone loading the app.
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
@@ -55,7 +49,6 @@ async function request<T>(
 
 export const api = {
   base: BASE,
-  token: LEGACY_TOKEN,
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
@@ -63,8 +56,7 @@ export const api = {
 };
 
 export function streamUrl(jobId: string): string {
-  // SSE uses the legacy bearer in the Authorization header (sent via fetch+
-  // ReadableStream). Once cookie-based SSE is wired everywhere we can drop
-  // NEXT_PUBLIC_API_TOKEN entirely.
+  // SSE is authenticated by the same first-party session cookie (the fetch in
+  // LiveLogStream sends credentials: 'include'); no token in the URL or bundle.
   return `${BASE}/api/jobs/${jobId}/stream`;
 }

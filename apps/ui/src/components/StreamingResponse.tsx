@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { api, streamUrl } from '@/lib/api';
+import { streamUrl } from '@/lib/api';
 
 interface Props {
   jobId: string;
@@ -36,10 +36,10 @@ export function StreamingResponse({ jobId }: Props) {
     const ctrl = new AbortController();
     (async () => {
       try {
-        const headers: Record<string, string> = { Accept: 'text/event-stream' };
-        if (api.token) headers.Authorization = `Bearer ${api.token}`;
+        // Authenticated by the first-party session cookie (credentials:
+        // 'include') — no bearer token is embedded in the browser bundle.
         const res = await fetch(streamUrl(jobId), {
-          headers,
+          headers: { Accept: 'text/event-stream' },
           credentials: 'include',
           signal: ctrl.signal,
         });

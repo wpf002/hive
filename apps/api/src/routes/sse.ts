@@ -3,6 +3,8 @@ import { prisma } from '@hive/db';
 import { env } from '../env.js';
 import { createBlockingRedis, STREAMS } from '../redis.js';
 import { findValidSession, SESSION_COOKIE } from '../lib/sessions.js';
+import { isOriginAllowed } from '../lib/cors.js';
+import { timingSafeEqualStr } from '../lib/constant-time.js';
 
 const HEARTBEAT_MS = 15_000;
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
@@ -13,13 +15,13 @@ function sseWrite(reply: FastifyReply, event: string, data: unknown) {
 }
 
 async function authorize(req: FastifyRequest): Promise<boolean> {
-  // 1) Bearer token (header or ?token= query fallback for tooling).
+  // 1) Bearer token (Authorization header only — we no longer accept a ?token=
+  //    query param, which would leak the token into proxy/access logs and the
+  //    browser Referer header). Compared in constant time.
   const header = req.headers.authorization;
   const headerToken = typeof header === 'string' ? /^Bearer\s+(.+)$/i.exec(header.trim())?.[1] : undefined;
-  const queryToken = (req.query as Record<string, unknown>)?.token;
-  const token = headerToken ?? (typeof queryToken === 'string' ? queryToken : undefined);
-  if (token === env.API_AUTH_TOKEN) return true;
-  // 2) Session cookie.
+  if (headerToken && timingSafeEqualStr(headerToken, env.API_AUTH_TOKEN)) return true;
+  // 2) Session cookie (how the browser UI authenticates).
   const cookies = (req as FastifyRequest & { cookies?: Record<string, string | undefined> }).cookies;
   const sessionToken = cookies?.[SESSION_COOKIE];
   if (sessionToken) {
@@ -52,7 +54,7 @@ export async function sseRoutes(app: FastifyInstance) {
       'X-Accel-Buffering': 'no',
     };
     const origin = req.headers.origin;
-    if (origin) {
+    if (origin && isOriginAllowed(origin)) {
       headers['Access-Control-Allow-Origin'] = origin;
       headers['Access-Control-Allow-Credentials'] = 'true';
       headers['Vary'] = 'Origin';

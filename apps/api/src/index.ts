@@ -17,14 +17,21 @@ import { authRoutes } from './routes/auth.js';
 import { artifactRoutes } from './routes/artifacts.js';
 import { statusRoutes } from './routes/status.js';
 import { initStorage } from './lib/artifacts.js';
+import { isOriginAllowed } from './lib/cors.js';
 
 await initStorage();
 
 const app = Fastify({ logger: loggerOptions });
 
-// CORS must allow credentials so the browser sends session cookies on /api/*.
+// CORS allows credentials so the browser sends session cookies on /api/*.
+// Because credentials are allowed we must validate the Origin against an
+// allowlist rather than reflecting it — reflecting any origin would let any
+// website issue authenticated requests and read the responses.
 app.register(cors, {
-  origin: (_origin, cb) => cb(null, true),
+  origin: (origin, cb) => {
+    if (isOriginAllowed(origin ?? undefined)) return cb(null, true);
+    cb(null, false);
+  },
   credentials: true,
 });
 app.register(cookie);

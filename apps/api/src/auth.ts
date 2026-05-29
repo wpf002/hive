@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import { env } from './env.js';
 import { findValidSession, SESSION_COOKIE } from './lib/sessions.js';
+import { timingSafeEqualStr } from './lib/constant-time.js';
 
 export type AuthScope = 'api' | 'worker' | 'any';
 export type Role = 'admin' | 'user';
@@ -53,8 +54,8 @@ async function tryAuthenticate(req: FastifyRequest): Promise<{ user?: AuthedUser
   // 2) Bearer token (workers + CLI scripts).
   const bearer = extractBearer(req);
   if (bearer) {
-    if (bearer === env.API_AUTH_TOKEN) return { staticAuth: 'api' };
-    if (bearer === env.WORKER_AUTH_TOKEN) return { staticAuth: 'worker' };
+    if (timingSafeEqualStr(bearer, env.API_AUTH_TOKEN)) return { staticAuth: 'api' };
+    if (timingSafeEqualStr(bearer, env.WORKER_AUTH_TOKEN)) return { staticAuth: 'worker' };
   }
   return {};
 }

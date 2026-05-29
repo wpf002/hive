@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { api, streamUrl } from '@/lib/api';
+import { streamUrl } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
 type Line = {
@@ -54,12 +54,10 @@ export function LiveLogStream({ jobId }: { jobId: string }) {
     const ctrl = new AbortController();
     (async () => {
       try {
-        // Prefer session cookies (Phase 3c+). Fall back to NEXT_PUBLIC_API_TOKEN
-        // only when present — that's the path for fresh installs before login.
-        const headers: Record<string, string> = { Accept: 'text/event-stream' };
-        if (api.token) headers.Authorization = `Bearer ${api.token}`;
+        // Authenticated by the first-party session cookie (credentials:
+        // 'include') — no bearer token is embedded in the browser bundle.
         const res = await fetch(streamUrl(jobId), {
-          headers,
+          headers: { Accept: 'text/event-stream' },
           credentials: 'include',
           signal: ctrl.signal,
         });

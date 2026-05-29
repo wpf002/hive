@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
-import { hashPassword, verifyPassword } from '../lib/passwords.js';
+import { hashPassword, verifyPassword, verifyPasswordDummy } from '../lib/passwords.js';
+import { rateLimit } from '../lib/rate-limit.js';
 import {
   SESSION_COOKIE,
   cookieOptionsForSession,
@@ -87,10 +88,18 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.code(201).send(publicUser(user));
   });
 
-  app.post('/api/auth/login', async (req, reply) => {
+  app.post(
+    '/api/auth/login',
+    { preHandler: rateLimit({ name: 'login', max: 10, windowSec: 300 }) },
+    async (req, reply) => {
     const body = LoginBody.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
-    if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
+    // Always spend bcrypt time, even when the user doesn't exist, so response
+    // latency can't be used to enumerate valid emails.
+    const ok = user
+      ? await verifyPassword(body.password, user.passwordHash)
+      : await verifyPasswordDummy(body.password);
+    if (!user || !ok) {
       await writeAuditLog(req, { action: 'auth.login_failed', payload: { email: body.email } });
       return reply.code(401).send({ error: { code: 'invalid_credentials', message: 'email or password is incorrect' } });
     }
@@ -153,7 +162,10 @@ export async function authRoutes(app: FastifyInstance) {
   // Always returns 200 regardless of whether the email exists — this prevents
   // account enumeration. The real work (token + email) only happens when the
   // user is found.
-  app.post('/api/auth/request-password-reset', async (req, reply) => {
+  app.post(
+    '/api/auth/request-password-reset',
+    { preHandler: rateLimit({ name: 'pwreset-request', max: 5, windowSec: 3600 }) },
+    async (req, reply) => {
     const body = RequestPasswordResetBody.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
     if (user) {
@@ -192,7 +204,10 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
-  app.post('/api/auth/reset-password', async (req, reply) => {
+  app.post(
+    '/api/auth/reset-password',
+    { preHandler: rateLimit({ name: 'pwreset-consume', max: 10, windowSec: 3600 }) },
+    async (req, reply) => {
     const body = ResetPasswordWithTokenBody.parse(req.body);
     const found = await findValidResetToken(body.token);
     if (!found) {

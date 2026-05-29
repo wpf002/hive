@@ -35,9 +35,14 @@ const Env = z.object({
   HIVE_EMAIL_PROVIDER: z.enum(['log', 'resend']).default('log'),
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().optional(),
-  // Public origin of the UI, used to build the password-reset link. Defaults to
-  // the local dev UI port; set to https://hive.<yourdomain> in production.
+  // Public origin of the UI, used to build the password-reset link and as the
+  // primary allowed CORS origin. Defaults to the local dev UI port; set to
+  // https://hive.<yourdomain> in production.
   HIVE_PUBLIC_APP_URL: z.string().default('http://localhost:3001'),
+  // Optional extra browser origins allowed to make credentialed CORS requests,
+  // comma-separated (e.g. "https://admin.example.com,https://staging.example.com").
+  // HIVE_PUBLIC_APP_URL is always allowed; localhost is auto-allowed in dev.
+  HIVE_CORS_ORIGINS: z.string().optional(),
   // Phase 6b (optional): if set, critical audit events email this address. The
   // session-sweeper service runs the polling job; the API tolerates the var so
   // env validation stays uniform across services.
