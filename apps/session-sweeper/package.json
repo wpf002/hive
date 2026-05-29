@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start:fly": "tsx src/index.ts",
     "build": "tsc",
     "start": "node --env-file=../../.env dist/index.js",
     "typecheck": "tsc --noEmit"

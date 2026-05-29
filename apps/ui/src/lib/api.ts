@@ -1,4 +1,8 @@
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+// Browser base URL. Default '' = same-origin, so requests hit the UI's own
+// origin and are proxied to the API by next.config.js rewrites (keeps the
+// session cookie first-party). Set NEXT_PUBLIC_API_BASE only to talk to a
+// cross-origin API directly (not needed with the proxy).
+const BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 // Legacy fallback so SSE keeps working while sessions roll out. Once you've
 // logged in once, the cookie takes precedence and this can be removed.
 const LEGACY_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? '';

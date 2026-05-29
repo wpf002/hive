@@ -8,7 +8,10 @@ import { LiveTradingBanner } from '@/components/LiveTradingBanner';
 import { TopBar } from '@/components/TopBar';
 
 const SESSION_COOKIE = 'hive_session';
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+// Server-side calls need an absolute API URL (relative '' only works in the
+// browser via the proxy). Prefer the server-only API_PROXY_TARGET.
+const API_BASE =
+  process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000';
 
 async function checkAuth(): Promise<boolean> {
   const cookieStore = cookies();

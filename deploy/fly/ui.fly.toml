@@ -6,16 +6,17 @@ primary_region = "ord"
 
 [build.args]
   SERVICE = "apps/ui"
+  # Empty = the browser uses same-origin requests, proxied to the API by
+  # next.config.js. Baked into the client bundle at build time.
+  NEXT_PUBLIC_API_BASE = ""
 
 [env]
   NODE_ENV       = "production"
   UI_PORT        = "3001"
   HIVE_ENV_LABEL = "production"
-  # NEXT_PUBLIC_API_BASE must point at the *deployed* hive-api app URL.
-  # Set it here AFTER the API deploy:
-  #   flyctl secrets set --app hive-ui NEXT_PUBLIC_API_BASE=https://hive-api.fly.dev
-  # NEXT_PUBLIC_* values are bundled into the client at build time, so a
-  # change requires a redeploy — fly's `flyctl deploy` is correct.
+  # Server-side proxy target: Next forwards /api/* and /healthz here over Fly's
+  # private network. Keeps session cookies first-party to the UI host.
+  API_PROXY_TARGET = "http://hive-api.flycast:4000"
 
 [http_service]
   internal_port        = 3001

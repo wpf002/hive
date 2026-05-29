@@ -1,7 +1,9 @@
 // Phase 5c: surface the deployed environment name (e.g. 'staging', 'production')
 // in the top bar so an operator can tell at a glance which env they're driving.
 // Set HIVE_ENV_LABEL on the API host; rendered only when present.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+// Server component — needs an absolute API URL (prefer the server-only proxy target).
+const API_BASE =
+  process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000';
 
 function colorFor(label: string): string {
   const l = label.toLowerCase();

@@ -1,5 +1,7 @@
 // Public status page (Phase 6c.3). No auth. Server-rendered, cached 30s.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+// Server component — absolute API URL (prefer the server-only proxy target).
+const API_BASE =
+  process.env.API_PROXY_TARGET || process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000';
 
 export const revalidate = 30;
 
