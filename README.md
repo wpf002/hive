@@ -76,9 +76,27 @@ make workers-dev       # all worker pools (separate terminal)
 UI: http://localhost:3001
 API: http://localhost:4000
 
+## Tests
+
+```bash
+pnpm test                          # all unit tests (TS, no infra needed)
+pnpm verify                        # typecheck + lint + unit tests (the pre-push gate)
+pnpm --filter @hive/api test:integration   # auth/authz against a live DB (auto-skips if none)
+pnpm --filter @hive/crypto crosslang-test  # TS⇄Python secret-crypto round-trip
+# Python SSRF guard (monitor):
+workers/monitor/.venv/bin/python -m unittest discover -s workers/monitor/tests
+```
+
+Unit tests use Node's built-in test runner via `tsx` (zero extra deps) and cover
+the security-critical paths: constant-time token compare, the CORS allowlist,
+password hashing + login-enumeration guard, and field-level secret
+encrypt/decrypt/mask. Integration tests lock in the admin-only execution
+boundary (only admins can create/run bots); they skip cleanly when no DB is
+reachable, so they never block `pnpm test`.
+
 ### Git hooks
 
-A pre-push hook runs `pnpm verify` (typecheck + lint) before allowing a push. Install once after cloning:
+A pre-push hook runs `pnpm verify` (typecheck + lint + unit tests) before allowing a push. Install once after cloning:
 
 ```bash
 bash scripts/install-git-hooks.sh

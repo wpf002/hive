@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\"",
     "crosslang-test": "tsx --env-file=../../.env src/crosslang-test.ts"
   },
   "dependencies": {

@@ -37,7 +37,7 @@ stop and fix it first.
 
 - [ ] `git status` is clean and you are on the commit you intend to ship.
 - [ ] `pnpm install` completes with no errors.
-- [ ] `pnpm verify` passes (`pnpm -r typecheck && pnpm -r lint`).
+- [ ] `pnpm verify` passes (`pnpm -r typecheck && pnpm -r lint && pnpm -r test`).
 - [ ] `pnpm --filter @hive/crypto crosslang-test` passes (TS⇄Python secret
       crypto round-trips — a mismatch here means workers can't decrypt secrets).
 - [ ] All Phase 1–5 verification flows still pass locally:

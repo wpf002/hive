@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\"",
+    "test:integration": "node --env-file-if-exists=../../.env --import tsx --test --test-force-exit \"src/**/*.itest.ts\"",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
     "seed:demo": "tsx --env-file-if-exists=../../.env src/seed-demo.ts",
     "encrypt-existing-secrets": "tsx --env-file-if-exists=../../.env src/scripts/encrypt-existing-secrets.ts",
