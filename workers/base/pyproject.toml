@@ -1,6 +1,6 @@
 [project]
 name = "hive-base"
-version = "0.1.0"
+version = "1.0.0"
 description = "Shared library for Hive Python workers"
 requires-python = ">=3.11"
 dependencies = [

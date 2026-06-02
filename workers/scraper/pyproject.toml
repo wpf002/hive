@@ -1,6 +1,6 @@
 [project]
 name = "hive-scraper"
-version = "0.1.0"
+version = "1.0.0"
 description = "API/HTML scrapers (httpx, BeautifulSoup, Scrapy)"
 requires-python = ">=3.11"
 dependencies = [

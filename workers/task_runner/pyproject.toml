@@ -1,6 +1,6 @@
 [project]
 name = "hive-task-runner"
-version = "0.1.0"
+version = "1.0.0"
 description = "Generic distributed tasks — subprocess runner, NOT arq (pool name is historical)"
 requires-python = ">=3.11"
 dependencies = [
