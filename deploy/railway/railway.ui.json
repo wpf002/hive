@@ -6,7 +6,6 @@
     "dockerfileBuildArgs": { "SERVICE": "apps/ui" }
   },
   "deploy": {
-    "startCommand": "pnpm --filter @hive/ui start",
     "healthcheckPath": "/",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE"

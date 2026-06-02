@@ -3,10 +3,9 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "deploy/fly/Dockerfile.ts-app",
-    "dockerfileBuildArgs": { "SERVICE": "apps/session-sweeper" }
+    "dockerfileBuildArgs": { "SERVICE": "workers/mcp_host" }
   },
   "deploy": {
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
+    "restartPolicyType": "ON_FAILURE"
   }
 }

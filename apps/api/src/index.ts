@@ -60,7 +60,10 @@ app.register(artifactRoutes);
 app.register(statusRoutes);
 
 try {
-  await app.listen({ port: env.API_PORT, host: '0.0.0.0' });
+  // Honor the platform-injected $PORT (Railway, Heroku, etc.); fall back to the
+  // configured API_PORT (Fly sets PORT=4000 which matches the default anyway).
+  const port = process.env.PORT ? Number(process.env.PORT) : env.API_PORT;
+  await app.listen({ port, host: '0.0.0.0' });
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');
   process.exit(1);

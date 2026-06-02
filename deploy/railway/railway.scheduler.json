@@ -6,9 +6,7 @@
     "dockerfileBuildArgs": { "SERVICE": "apps/scheduler" }
   },
   "deploy": {
-    "startCommand": "pnpm --filter @hive/scheduler start",
-    "healthcheckPath": "/healthz",
-    "healthcheckTimeout": 30,
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
   }
 }

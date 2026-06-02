@@ -2,8 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "DOCKERFILE",
-    "dockerfilePath": "deploy/fly/Dockerfile.ts-app",
-    "dockerfileBuildArgs": { "SERVICE": "workers/ai_agent" }
+    "dockerfilePath": "workers/browser/Dockerfile"
   },
   "deploy": {
     "restartPolicyType": "ON_FAILURE"

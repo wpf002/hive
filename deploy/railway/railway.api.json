@@ -3,11 +3,9 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "deploy/fly/Dockerfile.ts-app",
-    "buildCommand": null,
     "dockerfileBuildArgs": { "SERVICE": "apps/api" }
   },
   "deploy": {
-    "startCommand": "pnpm --filter @hive/api start",
     "healthcheckPath": "/healthz",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
