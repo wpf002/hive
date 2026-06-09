@@ -62,7 +62,6 @@ At minimum for Phase 1:
 - `OPENAI_API_KEY` — same
 - `PERPLEXITY_API_KEY` — same
 
-The rest (Discord, Telegram, etc.) can wait until you build those pools out.
 
 ## 6. Run the control plane
 

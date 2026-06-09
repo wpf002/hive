@@ -31,7 +31,6 @@ CONTROL_PLANE=(hive-api hive-ui hive-dispatcher hive-scheduler hive-session-swee
 WORKERS=(
   hive-worker-scraper hive-worker-monitor hive-worker-ai-agent hive-worker-trading
   hive-worker-mcp-host hive-worker-ci-agent hive-worker-task-runner
-  hive-worker-discord hive-worker-telegram hive-worker-browser
 )
 ALL_APPS=("${CONTROL_PLANE[@]}" "${WORKERS[@]}")
 

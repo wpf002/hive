@@ -1,6 +1,6 @@
 # 🐝 Hive
 
-Distributed bot orchestration platform. One control plane, eleven worker pools, unlimited bot templates, scales from a single Mac to a cloud fleet.
+Distributed bot orchestration platform. One control plane, ten worker pools, unlimited bot templates, scales from a single Mac to a cloud fleet.
 
 > **Production (Fly.io):** https://hive-ui.fly.dev · status: https://hive-ui.fly.dev/status · API: https://hive-api.fly.dev
 > _(deployed via [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md); a custom domain is optional — see 6b.)_
@@ -23,7 +23,7 @@ Distributed bot orchestration platform. One control plane, eleven worker pools, 
    │ browser │ scraper │ rpa-desktop │ ... │  ai-agent (TS)    │
    │ (PY)    │ (PY)    │ (PY)        │     │  trading  (TS)    │
    └─────────┴─────────┴─────────────┴─────┴───────────────────┘
-                        11 worker pools
+                        10 worker pools
 ```
 
 ## Worker pools
@@ -34,7 +34,6 @@ Distributed bot orchestration platform. One control plane, eleven worker pools, 
 | `scraper` | Python + httpx / Scrapy | API + HTML scraping, sportsbook lines, ESPN |
 | `rpa_desktop` | Python + pyautogui | Desktop app + legacy system automation |
 | `discord` | Python + discord.py | Discord bots you own |
-| `telegram` | Python + python-telegram-bot | Telegram bots you own |
 | `trading` | TypeScript + ccxt | Market making, arbitrage, Crossbar order placement |
 | `monitor` | Python + apscheduler | Uptime, alerting, cron-style health checks |
 | `mcp_host` | TypeScript + MCP SDK | Fleet of MCP servers; exposes Hive bots as MCP tools |
@@ -110,7 +109,6 @@ Bypass with `git push --no-verify` if you need to push WIP. The hook lives in `s
 |---|---|
 | Headless browsers | 20–50 |
 | API scrapers | 500–2000 |
-| Discord / Telegram bots | 50–100+ |
 | Desktop RPA | 1 per machine (shares mouse/keyboard) |
 | Trading / monitor loops | thousands |
 
@@ -142,7 +140,6 @@ hive/
 │   ├── scraper/     httpx + Scrapy
 │   ├── rpa_desktop/ pyautogui
 │   ├── discord/     discord.py
-│   ├── telegram/    python-telegram-bot
 │   ├── trading/     ccxt (TS)
 │   ├── monitor/     apscheduler
 │   ├── mcp_host/    MCP SDK (TS)
@@ -158,7 +155,6 @@ hive/
 
 - **Phase 1** — Control plane (API + UI + dispatcher) + `scraper` worker end-to-end. Bot CRUD, job dispatch, SSE log streaming.
 - **Phase 2** — `ai_agent` + `browser` + `monitor` workers. AI Console tab in UI. Cost tracking.
-- **Phase 3** — `trading` + `discord` + `telegram`. Real-time SSE everywhere.
 - **Phase 4** — `mcp_host` + `rpa_desktop` + `ci_agent` + `task_runner`.
 - **Phase 5** — Cloud deploy targets (Fly.io / Railway / AWS), horizontal scaling, multi-tenant.
 - **Phase 6** — Go live: provision a real cloud environment, set production secrets, deploy via `deploy/fly/deploy-all.sh` or `terraform apply`, run `scripts/smoke-cloud.sh`, point DNS. See [docs/DEPLOY.md](docs/DEPLOY.md).

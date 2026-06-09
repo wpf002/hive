@@ -186,7 +186,6 @@ resource "aws_lb_target_group" "ui" {
 locals {
   worker_pools = [
     "scraper", "monitor", "browser", "ai-agent", "trading",
-    "mcp-host", "ci-agent", "task-runner", "discord", "telegram",
   ]
 }
 

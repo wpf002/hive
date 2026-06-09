@@ -37,7 +37,6 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t $REPO/hive-ui:latest --push .
 
 # Workers (loop over the pool set)
-for pool in scraper monitor browser ci_agent task_runner discord telegram; do
   DOCKERFILE=deploy/fly/Dockerfile.python-worker
   [ "$pool" = "browser" ] && DOCKERFILE=workers/browser/Dockerfile
   docker buildx build --platform linux/amd64 \

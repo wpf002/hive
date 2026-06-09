@@ -22,7 +22,6 @@ shell script `deploy/fly/deploy-all.sh` is the &ldquo;do all the things&rdquo; c
 | workers/ci_agent      | Worker (Py) | `hive-worker-ci-agent` | 0..N   |
 | workers/task_runner   | Worker (Py) | `hive-worker-task-runner` | 0..N |
 | workers/discord       | Worker (Py) | `hive-worker-discord`  | 0..N   |
-| workers/telegram      | Worker (Py) | `hive-worker-telegram` | 0..N   |
 
 **rpa_desktop is not deployed** — it requires a physical desktop session.
 Run that pool on a real machine (laptop, NUC, dedicated host).
@@ -57,7 +56,6 @@ for svc in hive-api hive-dispatcher hive-scheduler hive-session-sweeper hive-ui 
            hive-worker-scraper hive-worker-monitor hive-worker-browser \
            hive-worker-ai-agent hive-worker-trading hive-worker-mcp-host \
            hive-worker-ci-agent hive-worker-task-runner \
-           hive-worker-discord hive-worker-telegram; do
   flyctl apps create "$svc" --org personal
 done
 

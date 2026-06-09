@@ -11,7 +11,6 @@ const KNOWN_POOLS = new Set([
   'scraper',
   'rpa_desktop',
   'discord',
-  'telegram',
   'trading',
   'monitor',
   'mcp_host',

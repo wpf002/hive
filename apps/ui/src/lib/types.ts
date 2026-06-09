@@ -1,5 +1,5 @@
 export type Pool =
-  | 'browser' | 'scraper' | 'rpa_desktop' | 'discord' | 'telegram'
+  | 'browser' | 'scraper' | 'rpa_desktop' | 'discord'
   | 'trading' | 'monitor' | 'mcp_host' | 'ci_agent' | 'task_runner' | 'ai_agent';
 
 export type JobStatus =

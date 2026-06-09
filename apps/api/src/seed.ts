@@ -255,52 +255,6 @@ const TEMPLATES: SeedTemplate[] = [
       durationSeconds: 300,
     },
   },
-  // ============ Telegram (Phase 3a) ============
-  {
-    name: 'Telegram Channel Poster',
-    description: 'Send a message to a Telegram channel or group. parseMode default MarkdownV2 — remember to escape MarkdownV2 reserved chars. Token is encrypted at rest (Phase 4a).',
-    poolType: 'telegram',
-    configSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['botToken', 'chatId', 'content'],
-      properties: {
-        botToken: { type: 'string', format: 'password', 'x-secret': true },
-        chatId: { type: 'string', description: 'Channel @handle or numeric chat ID' },
-        content: { type: 'string', maxLength: 4096 },
-        parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
-        disableNotification: { type: 'boolean', default: false },
-        disablePreview: { type: 'boolean', default: false },
-      },
-    },
-    defaultConfig: { botToken: '', chatId: '', content: 'Hello from Hive', parseMode: 'plain' },
-  },
-  {
-    name: 'Telegram DM Alerter',
-    description: 'Personal page-me style alerts to a Telegram user with severity prefix (info/warn/critical). User must have started a chat with the bot first.',
-    poolType: 'telegram',
-    configSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['botToken', 'userId', 'content'],
-      properties: {
-        botToken: { type: 'string', format: 'password', 'x-secret': true },
-        userId: { type: 'string', description: 'Numeric Telegram user ID' },
-        content: { type: 'string', maxLength: 4096 },
-        parseMode: { type: 'string', enum: ['MarkdownV2', 'HTML', 'plain'], default: 'MarkdownV2' },
-        severity: { type: 'string', enum: ['info', 'warn', 'critical'], default: 'info' },
-        prefix: { type: 'boolean', default: true, description: 'Prepend emoji + severity tag' },
-      },
-    },
-    defaultConfig: {
-      botToken: '',
-      userId: '',
-      content: 'Hive alert — test page',
-      parseMode: 'plain',
-      severity: 'info',
-      prefix: true,
-    },
-  },
   // ============ Trading (Phase 3b) ============
   {
     name: 'Trading Market Order',

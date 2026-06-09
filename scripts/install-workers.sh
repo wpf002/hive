@@ -2,7 +2,6 @@
 # Install Python deps for each Python worker pool
 set -e
 
-PYTHON_POOLS=(base browser scraper rpa_desktop discord telegram monitor ci_agent task_runner)
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 for pool in "${PYTHON_POOLS[@]}"; do

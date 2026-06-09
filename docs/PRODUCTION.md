@@ -19,7 +19,6 @@ api.hive.<domain> ─▶┌─────────────────�
               └──────────────────┘      └────────────────────────┘
    control plane: hive-dispatcher, hive-scheduler, hive-session-sweeper
    workers (scale 0..N): hive-worker-{scraper,monitor,ai-agent,trading,
-            mcp-host,ci-agent,task-runner,discord,telegram,browser}
    artifacts: Tigris bucket  hive-artifacts-prod  (S3-compatible)
 ```
 

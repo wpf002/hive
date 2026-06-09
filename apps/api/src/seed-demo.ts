@@ -158,7 +158,6 @@ async function main() {
   const monitor = await makeBot({ templateName: 'HTTP Endpoint Monitor', name: 'Homepage Monitor', overrides: { url: 'https://example.com' } });
   const heartbeat = await makeBot({ templateName: 'Cron Heartbeat', name: 'Alive Heartbeat' });
   const discord = await makeBot({ templateName: 'Discord Channel Poster', name: 'Ops Channel Poster', overrides: { botToken: 'demo-discord-bot-token-abc123', channelId: '987654321', content: 'Deploy finished ✅' } });
-  const telegram = await makeBot({ templateName: 'Telegram DM Alerter', name: 'Pager (Telegram)', overrides: { botToken: 'demo-tg-token-xyz789', userId: '55501', content: 'Hive alert' }, enabled: false });
   const trade = await makeBot({ templateName: 'Trading Market Order', name: 'BTC Paper Buy', overrides: { exchange: 'binance', symbol: 'BTC/USDT', side: 'buy', amount: 0.01, mode: 'paper', apiKey: 'demo-key', apiSecret: 'demo-secret' } });
   const screenshot = await makeBot({ templateName: 'Full Page Screenshot', name: 'Landing Page Shot' });
   const shell = await makeBot({ templateName: 'Shell Command Runner (Native)', name: 'Nightly Echo', enabled: false });
@@ -261,7 +260,6 @@ async function main() {
       W('wk-tsk-1', 'task_runner', 'task-runner-1', 'online', 6),
       W('wk-ci-1', 'ci_agent', 'ci-agent-1', 'draining', 20, { metadata: { version: '0.1.0', status: 'draining' } }),
       W('wk-trd-1', 'trading', 'trading-1', 'offline', 600, { region: 'us-west', zone: 'a' }),
-      W('wk-tg-1', 'telegram', 'telegram-1', 'offline', 900),
     ],
   });
   console.log('✓ 11 workers (online / draining / offline)');

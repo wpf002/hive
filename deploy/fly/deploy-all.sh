@@ -42,7 +42,6 @@ SERVICES=(
   "worker-ci-agent"
   "worker-task-runner"
   "worker-discord"
-  "worker-telegram"
 )
 
 DRY_RUN=0

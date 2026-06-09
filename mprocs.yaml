@@ -26,8 +26,6 @@ procs:
   discord:
     shell: workers/discord/.venv/bin/python -m hive_discord.main
     autostart: true
-  telegram:
-    shell: workers/telegram/.venv/bin/python -m hive_telegram.main
     autostart: true
   trading:
     shell: pnpm --filter @hive/worker-trading dev

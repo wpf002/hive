@@ -5,7 +5,6 @@ All notable changes to Hive are documented here.
 ## [1.0.0] - 2026-06-02
 
 First stable release. Hive is feature-complete across all 11 worker pools
-(browser, scraper, rpa_desktop, discord, telegram, trading, monitor, mcp_host,
 ci_agent, task_runner, ai_agent), deployed to Fly.io, with a control plane
 (API + UI + dispatcher + scheduler + session-sweeper), field-level secret
 encryption (envelope/KMS), artifacts, scheduling, and a public status page.

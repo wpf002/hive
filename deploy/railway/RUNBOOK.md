@@ -15,7 +15,6 @@ Control plane (TS, `Dockerfile.ts-app`): **api, ui, dispatcher, scheduler,
 session-sweeper**
 TS workers: **worker-ai-agent, worker-mcp-host, worker-trading**
 Python workers (`Dockerfile.python-worker`): **worker-scraper, worker-ci-agent,
-worker-discord, worker-monitor, worker-task-runner, worker-telegram**
 Browser worker (own `workers/browser/Dockerfile`): **worker-browser**
 **worker-rpa-desktop** — config exists for completeness but **do NOT deploy it**:
 it needs a real desktop/display (pyautogui), which a Railway container can't
@@ -77,7 +76,6 @@ can't do). Or create via CLI then set the path in the UI:
 for svc in api ui dispatcher scheduler session-sweeper \
            worker-ai-agent worker-mcp-host worker-trading \
            worker-scraper worker-ci-agent worker-discord worker-monitor \
-           worker-task-runner worker-telegram worker-browser; do
   railway add --service "$svc" --repo wpf002/hive
 done
 ```
@@ -104,7 +102,6 @@ Per-service extras:
 | worker-ai-agent | `ANTHROPIC_API_KEY` (+ `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`) |
 | worker-scraper | `ODDS_API_KEY` |
 | worker-discord | `DISCORD_BOT_TOKEN` |
-| worker-telegram | `TELEGRAM_BOT_TOKEN` |
 | worker-trading | exchange keys; keep `TRADING_LIVE_ENABLED=false` |
 
 Ports: the API now honors Railway's injected `$PORT`; the UI binds `$PORT` too
@@ -130,7 +127,6 @@ Deploy each service:
 for svc in api ui dispatcher scheduler session-sweeper \
            worker-ai-agent worker-mcp-host worker-trading \
            worker-scraper worker-ci-agent worker-discord worker-monitor \
-           worker-task-runner worker-telegram worker-browser; do
   railway up --service "$svc" --detach
 done
 ```

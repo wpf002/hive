@@ -6,7 +6,6 @@
 | scraper | Python + httpx/Scrapy | API scrapers, sportsbook lines, ESPN |
 | rpa_desktop | Python + pyautogui | Desktop app automation |
 | discord | Python + discord.py | Discord bots |
-| telegram | Python + python-telegram-bot | Telegram bots |
 | trading | TypeScript + ccxt | Market making, arbitrage, Crossbar |
 | monitor | Python + apscheduler | Uptime, alerting, cron probes |
 | mcp_host | TypeScript + MCP SDK | MCP server fleet — see [MCP.md](./MCP.md) |

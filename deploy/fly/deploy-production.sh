@@ -23,7 +23,6 @@ CONTROL_PLANE_AFTER_API=(dispatcher scheduler session-sweeper)
 WORKERS=(
   worker-scraper worker-monitor worker-ai-agent worker-trading
   worker-mcp-host worker-ci-agent worker-task-runner
-  worker-discord worker-telegram worker-browser
 )
 
 command -v flyctl >/dev/null 2>&1 || { echo "✗ flyctl not found" >&2; exit 1; }

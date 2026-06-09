@@ -66,7 +66,6 @@ stop and fix it first.
 - [ ] `ODDS_API_KEY` (worker-scraper — the-odds-api.com)
 - [ ] `RESEND_API_KEY` (api)
 - [ ] `DISCORD_BOT_TOKEN` (worker-discord, optional)
-- [ ] `TELEGRAM_BOT_TOKEN` (worker-telegram, optional)
 
 ## Final mental check
 
