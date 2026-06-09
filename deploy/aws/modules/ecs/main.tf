@@ -181,7 +181,6 @@ resource "aws_lb_target_group" "ui" {
   }
 }
 
-# ---------- Worker services (one per pool except rpa_desktop) ----------
 
 locals {
   worker_pools = [

@@ -16,8 +16,6 @@ session-sweeper**
 TS workers: **worker-ai-agent, worker-mcp-host, worker-trading**
 Python workers (`Dockerfile.python-worker`): **worker-scraper, worker-ci-agent,
 Browser worker (own `workers/browser/Dockerfile`): **worker-browser**
-**worker-rpa-desktop** — config exists for completeness but **do NOT deploy it**:
-it needs a real desktop/display (pyautogui), which a Railway container can't
 provide.
 
 ## 0. Object storage (do this first)

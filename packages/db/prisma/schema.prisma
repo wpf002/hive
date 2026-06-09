@@ -11,7 +11,7 @@ model BotTemplate {
   id            String   @id @default(cuid())
   name          String
   description   String?
-  poolType      String // browser | scraper | rpa_desktop | trading | monitor | mcp_host | ci_agent | task_runner | ai_agent
+  poolType      String // browser | scraper | trading | monitor | mcp_host | ci_agent | task_runner | ai_agent
   configSchema  Json // JSON Schema for params
   defaultConfig Json
   // Phase 5b: optional dispatch-time placement. Shape: { region?: string; zone?: string }.

@@ -6,7 +6,6 @@ const POOL_COLORS: Record<Pool, string> = {
   ai_agent:    'bg-burnt-500/15 text-burnt-500 border-burnt-500/30',
   trading:     'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   browser:     'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  rpa_desktop: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30',
   monitor:     'bg-amber-500/15 text-amber-400 border-amber-500/30',
   mcp_host:    'bg-violet-500/15 text-violet-400 border-violet-500/30',
   ci_agent:    'bg-rose-500/15 text-rose-400 border-rose-500/30',
@@ -16,7 +15,6 @@ const POOL_COLORS: Record<Pool, string> = {
 const POOL_LABELS: Record<Pool, string> = {
   browser: 'Browser',
   scraper: 'Scraper',
-  rpa_desktop: 'Desktop RPA',
   trading: 'Trading',
   monitor: 'Monitor',
   mcp_host: 'MCP Host',

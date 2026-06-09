@@ -25,7 +25,6 @@ if ! command -v flyctl >/dev/null 2>&1; then
 fi
 flyctl auth whoami >/dev/null 2>&1 || { echo "✗ not authenticated — run: flyctl auth login" >&2; exit 1; }
 
-# Control-plane services + worker pools (rpa_desktop is intentionally excluded —
 # it needs a physical desktop session and runs on a real machine, not Fly).
 CONTROL_PLANE=(hive-api hive-ui hive-dispatcher hive-scheduler hive-session-sweeper)
 WORKERS=(

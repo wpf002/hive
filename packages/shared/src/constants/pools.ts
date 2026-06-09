@@ -1,7 +1,6 @@
 export const WORKER_POOLS = [
   'browser',
   'scraper',
-  'rpa_desktop',
   'trading',
   'monitor',
   'mcp_host',
@@ -15,7 +14,6 @@ export type WorkerPool = (typeof WORKER_POOLS)[number];
 export const POOL_LABELS: Record<WorkerPool, string> = {
   browser: 'Browser',
   scraper: 'Scraper',
-  rpa_desktop: 'Desktop RPA',
   trading: 'Trading',
   monitor: 'Monitor',
   mcp_host: 'MCP Host',

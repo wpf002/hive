@@ -23,7 +23,6 @@ meant to run in parallel.
 - **Workers self-declare region + zone** via `HIVE_WORKER_REGION` /
   `HIVE_WORKER_ZONE`. Pool affinity uses these labels — see
   [MULTIHOST.md](MULTIHOST.md).
-- **`rpa_desktop` is never deployed to cloud**. Run that pool on a real
   desktop machine. The Fly deploy script explicitly skips it; ECS and
   Railway scaffolds simply don&rsquo;t include it.
 

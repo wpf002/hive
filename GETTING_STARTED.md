@@ -128,7 +128,6 @@ Tell Claude "let's build Phase 1" when you're ready. The architecture is locked,
 
 **`pnpm install` fails**: Check Node version. `node --version` must be ≥ 20.
 
-**Python venv issues**: Some workers (especially `rpa_desktop`) have OS-specific deps. On macOS, `pyautogui` needs accessibility permissions granted to your terminal.
 
 **Prisma client errors**: Run `pnpm db:generate` after pulling schema changes.
 

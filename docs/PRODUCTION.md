@@ -22,7 +22,6 @@ api.hive.<domain> ─▶┌─────────────────�
    artifacts: Tigris bucket  hive-artifacts-prod  (S3-compatible)
 ```
 
-- **rpa_desktop is not deployed to Fly** — it needs a physical desktop session.
   Run it on a real machine with `pnpm workers:dev`.
 - Workers reach Postgres only via the API; only control-plane apps get a direct
   `DATABASE_URL`.

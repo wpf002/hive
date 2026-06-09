@@ -9,7 +9,6 @@ import { env } from './env.js';
 const KNOWN_POOLS = new Set([
   'browser',
   'scraper',
-  'rpa_desktop',
   'trading',
   'monitor',
   'mcp_host',

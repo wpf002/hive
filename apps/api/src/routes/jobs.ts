@@ -32,7 +32,7 @@ export async function jobRoutes(app: FastifyInstance) {
       if (!bot.enabled) {
         return reply.code(400).send({ error: { code: 'bot_disabled', message: 'bot is disabled' } });
       }
-      // Phase 4c — singleton pools (rpa_desktop) refuse parallel dispatch.
+      // Phase 4c — singleton pools refuse parallel dispatch.
       // A worker advertises `metadata.singleton: true` in its heartbeat; if
       // any such worker for this pool already has an active job, we 429 with
       // a retry hint instead of queueing forever behind it.

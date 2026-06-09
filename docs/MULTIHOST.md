@@ -6,7 +6,6 @@ matches a bot&rsquo;s **affinity** — useful when:
 
 - A bot needs a specific network (VPN, residential IP, prod-only egress).
 - A trading bot must run from a specific colo / cloud region for latency.
-- A `rpa_desktop` worker needs the physical machine in front of the user.
 - You want zero-downtime moves between regions during a migration.
 
 Pre-5b single-host setups keep working with **no env changes** — every worker
@@ -166,6 +165,4 @@ docker compose -f infra/docker/docker-compose.yml --profile worker-fleet-test do
   Redis. Use TLS in production. Workers that lose Redis exit and restart;
   in-flight jobs are marked failed via the worker&rsquo;s shutdown hook so the
   UI doesn&rsquo;t hang on &ldquo;running&rdquo; entries forever.
-- **`rpa_desktop` is host-only**: the pool depends on a physical mouse/keyboard.
-  Run one rpa_desktop worker per machine and declare its location accurately;
   the cloud deploy scripts explicitly skip this pool.

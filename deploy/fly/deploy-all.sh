@@ -18,7 +18,6 @@
 #   ./deploy/fly/deploy-all.sh api         # one service
 #   ./deploy/fly/deploy-all.sh --dry-run   # print what would happen
 #
-# Note: rpa_desktop is *not* deployed to the cloud — it requires a physical
 # desktop session. Run that pool on a real machine via `pnpm workers:dev`.
 set -euo pipefail
 
