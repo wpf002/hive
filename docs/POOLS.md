@@ -44,7 +44,6 @@ The worker fails loudly at startup if any of these is missing — better to know
 
 | Requirement | macOS | Linux | Windows |
 |---|---|---|---|
-| Tesseract binary (OCR) | `brew install tesseract` | `sudo apt-get install -y tesseract-ocr` | https://github.com/UB-Mannheim/tesseract/wiki |
 
 ### Security implications
 
