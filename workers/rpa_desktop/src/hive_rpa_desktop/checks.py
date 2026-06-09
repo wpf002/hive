@@ -10,13 +10,16 @@ import shutil
 
 
 def check_tesseract() -> None:
-    """pytesseract requires the `tesseract` binary on PATH."""
+    """`tesseract` is only needed by the OCR Field Reader template — it is NOT
+    required for Screen Region Capture or Window Macro Player. So we warn rather
+    than refuse to boot; the OCR template still fails clearly at job time if the
+    binary is missing. (Install: `brew install tesseract` / `apt-get install -y
+    tesseract-ocr`.)"""
     if not shutil.which("tesseract"):
-        raise RuntimeError(
-            "tesseract binary not found on PATH. OCR templates need it.\n"
-            "  macOS: brew install tesseract\n"
-            "  Debian/Ubuntu: sudo apt-get install -y tesseract-ocr\n"
-            "  Windows: https://github.com/UB-Mannheim/tesseract/wiki"
+        print(
+            "[rpa_desktop] WARNING: tesseract not on PATH — OCR Field Reader jobs "
+            "will fail, but Screen Capture and Macro Player work fine.",
+            flush=True,
         )
 
 
