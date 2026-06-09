@@ -50,27 +50,22 @@ async def stream_container_logs(
     """
     def _drain() -> None:
         try:
-            # demux=True yields (stdout, stderr) chunks separately.
-            for stdout_chunk, stderr_chunk in container.logs(
-                stream=True, follow=True, stdout=True, stderr=True, demux=True
+            # `container.logs(demux=...)` isn't supported across docker-py
+            # versions, so stream the combined stdout+stderr byte chunks (Docker
+            # interleaves them on the wire) and treat them as one log stream.
+            for chunk in container.logs(
+                stream=True, follow=True, stdout=True, stderr=True
             ):
-                if stdout_chunk:
-                    text = stdout_chunk.decode("utf-8", errors="replace")
-                    for line in text.rstrip("\n").split("\n"):
-                        if stdout_buf is not None:
-                            stdout_buf.append(line)
-                        # joblog calls have to happen on the event loop thread.
-                        asyncio.run_coroutine_threadsafe(
-                            joblog.info(stdout_event, line=line), loop
-                        )
-                if stderr_chunk:
-                    text = stderr_chunk.decode("utf-8", errors="replace")
-                    for line in text.rstrip("\n").split("\n"):
-                        if stderr_buf is not None:
-                            stderr_buf.append(line)
-                        asyncio.run_coroutine_threadsafe(
-                            joblog.warn(stderr_event, line=line), loop
-                        )
+                if not chunk:
+                    continue
+                text = chunk.decode("utf-8", errors="replace")
+                for line in text.rstrip("\n").split("\n"):
+                    if stdout_buf is not None:
+                        stdout_buf.append(line)
+                    # joblog calls have to happen on the event loop thread.
+                    asyncio.run_coroutine_threadsafe(
+                        joblog.info(stdout_event, line=line), loop
+                    )
         except APIError as e:
             asyncio.run_coroutine_threadsafe(
                 joblog.error("ci.docker_api_error", error=str(e)), loop

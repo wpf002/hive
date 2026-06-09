@@ -53,3 +53,4 @@ data/artifacts/
 # Phase 6 production secrets (never commit)
 deploy/fly/.secrets.env
 deploy/fly/*.secrets.env
+scripts/.localworker.env
