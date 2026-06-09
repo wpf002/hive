@@ -26,7 +26,6 @@ Create two **HTTPS GET** monitors, 1-minute interval:
 
 Alert channels:
 - Email to the operator (required)
-- Optionally a Slack/Discord webhook
 
 After creating them, **trigger a test alert** from the dashboard and confirm it
 arrives (runbook gate 7).

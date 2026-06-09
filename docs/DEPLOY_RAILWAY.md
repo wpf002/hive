@@ -51,7 +51,6 @@ For each service, copy/paste the shared env vars from the Railway UI
   `ADMIN_PASSWORD`, plus the S3 vars.
 - UI: needs `NEXT_PUBLIC_API_BASE` pointing at the public API URL.
 - Workers: need `WORKER_AUTH_TOKEN` + provider keys (`ANTHROPIC_API_KEY`,
-  `DISCORD_BOT_TOKEN`, etc.) for the pools they implement.
 
 ## Deploying
 

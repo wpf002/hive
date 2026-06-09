@@ -21,7 +21,6 @@ shell script `deploy/fly/deploy-all.sh` is the &ldquo;do all the things&rdquo; c
 | workers/mcp_host      | Worker (TS) | `hive-worker-mcp-host` | 0..N   |
 | workers/ci_agent      | Worker (Py) | `hive-worker-ci-agent` | 0..N   |
 | workers/task_runner   | Worker (Py) | `hive-worker-task-runner` | 0..N |
-| workers/discord       | Worker (Py) | `hive-worker-discord`  | 0..N   |
 
 **rpa_desktop is not deployed** — it requires a physical desktop session.
 Run that pool on a real machine (laptop, NUC, dedicated host).

@@ -215,7 +215,7 @@ class HiveWorker(ABC):
                 break
             await asyncio.sleep(0.1)
         # Anything still in-flight on shutdown gets marked failed so the UI doesn't
-        # show forever-"running" jobs (e.g. long-lived Discord slash listeners).
+        # show forever-"running" jobs (e.g. long-lived listener jobs).
         for jid in list(self._in_flight_jobs):
             try:
                 await dbmod.mark_failed(

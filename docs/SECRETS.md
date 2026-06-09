@@ -1,6 +1,5 @@
 # Secret handling
 
-Hive stores per-bot secrets (Discord tokens, exchange API keys, …) inside `Bot.config` as JSON. Since Phase 4a those values are encrypted at rest using XChaCha20-Poly1305 AEAD.
 
 ## Wire format
 

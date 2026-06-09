@@ -7,7 +7,6 @@
 #   - The shared secrets set on every Fly app:
 #       DATABASE_URL, REDIS_URL, API_AUTH_TOKEN, WORKER_AUTH_TOKEN,
 #       JWT_SECRET, SESSION_SECRET, HIVE_SECRETS_KEY
-#     plus app-specific secrets (ANTHROPIC_API_KEY, DISCORD_BOT_TOKEN, …).
 #   - For artifacts: an S3-compatible bucket (Tigris recommended). Set
 #       HIVE_STORAGE_PROVIDER=s3, HIVE_ARTIFACT_S3_BUCKET,
 #       HIVE_ARTIFACT_S3_ENDPOINT, HIVE_ARTIFACT_S3_REGION,
@@ -41,7 +40,6 @@ SERVICES=(
   "worker-mcp-host"
   "worker-ci-agent"
   "worker-task-runner"
-  "worker-discord"
 )
 
 DRY_RUN=0

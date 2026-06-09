@@ -1,6 +1,6 @@
 # 🐝 Hive
 
-Distributed bot orchestration platform. One control plane, ten worker pools, unlimited bot templates, scales from a single Mac to a cloud fleet.
+Distributed bot orchestration platform. One control plane, nine worker pools, unlimited bot templates, scales from a single Mac to a cloud fleet.
 
 > **Production (Fly.io):** https://hive-ui.fly.dev · status: https://hive-ui.fly.dev/status · API: https://hive-api.fly.dev
 > _(deployed via [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md); a custom domain is optional — see 6b.)_
@@ -23,7 +23,7 @@ Distributed bot orchestration platform. One control plane, ten worker pools, unl
    │ browser │ scraper │ rpa-desktop │ ... │  ai-agent (TS)    │
    │ (PY)    │ (PY)    │ (PY)        │     │  trading  (TS)    │
    └─────────┴─────────┴─────────────┴─────┴───────────────────┘
-                        10 worker pools
+                        9 worker pools
 ```
 
 ## Worker pools
@@ -33,7 +33,6 @@ Distributed bot orchestration platform. One control plane, ten worker pools, unl
 | `browser` | Python + Playwright | Headless fleets, end-to-end testing, web RPA |
 | `scraper` | Python + httpx / Scrapy | API + HTML scraping, sportsbook lines, ESPN |
 | `rpa_desktop` | Python + pyautogui | Desktop app + legacy system automation |
-| `discord` | Python + discord.py | Discord bots you own |
 | `trading` | TypeScript + ccxt | Market making, arbitrage, Crossbar order placement |
 | `monitor` | Python + apscheduler | Uptime, alerting, cron-style health checks |
 | `mcp_host` | TypeScript + MCP SDK | Fleet of MCP servers; exposes Hive bots as MCP tools |
@@ -139,7 +138,6 @@ hive/
 │   ├── browser/     Playwright fleet
 │   ├── scraper/     httpx + Scrapy
 │   ├── rpa_desktop/ pyautogui
-│   ├── discord/     discord.py
 │   ├── trading/     ccxt (TS)
 │   ├── monitor/     apscheduler
 │   ├── mcp_host/    MCP SDK (TS)

@@ -157,7 +157,6 @@ async function main() {
   const verdict = await makeBot({ templateName: 'AI Multi-Provider Verdict', name: 'Model Showdown' });
   const monitor = await makeBot({ templateName: 'HTTP Endpoint Monitor', name: 'Homepage Monitor', overrides: { url: 'https://example.com' } });
   const heartbeat = await makeBot({ templateName: 'Cron Heartbeat', name: 'Alive Heartbeat' });
-  const discord = await makeBot({ templateName: 'Discord Channel Poster', name: 'Ops Channel Poster', overrides: { botToken: 'demo-discord-bot-token-abc123', channelId: '987654321', content: 'Deploy finished ✅' } });
   const trade = await makeBot({ templateName: 'Trading Market Order', name: 'BTC Paper Buy', overrides: { exchange: 'binance', symbol: 'BTC/USDT', side: 'buy', amount: 0.01, mode: 'paper', apiKey: 'demo-key', apiSecret: 'demo-secret' } });
   const screenshot = await makeBot({ templateName: 'Full Page Screenshot', name: 'Landing Page Shot' });
   const shell = await makeBot({ templateName: 'Shell Command Runner (Native)', name: 'Nightly Echo', enabled: false });
@@ -194,8 +193,6 @@ async function main() {
   await makeJob(monitor, { status: 'failed', ageMin: 10, error: 'expected 200, got 502 (bad gateway)' });
   await makeJob(heartbeat, { status: 'succeeded', ageMin: 5, result: { label: 'hive', host: 'demo-worker-1' } });
   await makeJob(heartbeat, { status: 'queued', ageMin: 1 });
-  await makeJob(discord, { status: 'succeeded', ageMin: 50, result: { messageId: '111222333' } });
-  await makeJob(discord, { status: 'cancelled', ageMin: 45 });
 
   // Trading job → drives PaperTrade + TradeAudit below.
   const tradeJob = await makeJob(trade, {
@@ -256,7 +253,6 @@ async function main() {
       W('wk-scr-2', 'scraper', 'scraper-2', 'draining', 12, { activeJobs: 1, metadata: { version: '0.1.0', status: 'draining' } }),
       W('wk-mon-1', 'monitor', 'monitor-1', 'online', 4),
       W('wk-brw-1', 'browser', 'browser-1', 'online', 9, { activeJobs: 1 }),
-      W('wk-dsc-1', 'discord', 'discord-1', 'online', 7),
       W('wk-tsk-1', 'task_runner', 'task-runner-1', 'online', 6),
       W('wk-ci-1', 'ci_agent', 'ci-agent-1', 'draining', 20, { metadata: { version: '0.1.0', status: 'draining' } }),
       W('wk-trd-1', 'trading', 'trading-1', 'offline', 600, { region: 'us-west', zone: 'a' }),

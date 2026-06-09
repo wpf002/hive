@@ -10,7 +10,6 @@ const KNOWN_POOLS = new Set([
   'browser',
   'scraper',
   'rpa_desktop',
-  'discord',
   'trading',
   'monitor',
   'mcp_host',

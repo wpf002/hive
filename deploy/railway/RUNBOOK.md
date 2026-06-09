@@ -75,7 +75,6 @@ can't do). Or create via CLI then set the path in the UI:
 ```bash
 for svc in api ui dispatcher scheduler session-sweeper \
            worker-ai-agent worker-mcp-host worker-trading \
-           worker-scraper worker-ci-agent worker-discord worker-monitor \
   railway add --service "$svc" --repo wpf002/hive
 done
 ```
@@ -101,7 +100,6 @@ Per-service extras:
 | ui | `NEXT_PUBLIC_API_BASE=https://<api-domain>` *(build-time — set before deploy)* |
 | worker-ai-agent | `ANTHROPIC_API_KEY` (+ `OPENAI_API_KEY`, `PERPLEXITY_API_KEY`) |
 | worker-scraper | `ODDS_API_KEY` |
-| worker-discord | `DISCORD_BOT_TOKEN` |
 | worker-trading | exchange keys; keep `TRADING_LIVE_ENABLED=false` |
 
 Ports: the API now honors Railway's injected `$PORT`; the UI binds `$PORT` too
@@ -126,7 +124,6 @@ Deploy each service:
 ```bash
 for svc in api ui dispatcher scheduler session-sweeper \
            worker-ai-agent worker-mcp-host worker-trading \
-           worker-scraper worker-ci-agent worker-discord worker-monitor \
   railway up --service "$svc" --detach
 done
 ```

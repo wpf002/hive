@@ -65,7 +65,6 @@ stop and fix it first.
 - [ ] `PERPLEXITY_API_KEY` (worker-ai-agent, optional)
 - [ ] `ODDS_API_KEY` (worker-scraper — the-odds-api.com)
 - [ ] `RESEND_API_KEY` (api)
-- [ ] `DISCORD_BOT_TOKEN` (worker-discord, optional)
 
 ## Final mental check
 

@@ -66,7 +66,7 @@ function isSecret(p: SchemaProp): boolean {
 function isLongText(p: SchemaProp): boolean {
   // Heuristic — descriptions that name code/markdown/templates, or long
   // maxLength, get a textarea. The "Python Script Runner" and
-  // "Discord Slash Command Listener" both benefit.
+  // long-running listener templates both benefit.
   if ((p.maxLength ?? 0) >= 1000) return true;
   const d = (p.description ?? '').toLowerCase();
   return /\b(source|code|template|markdown|html|json|body|prompt)\b/.test(d);
