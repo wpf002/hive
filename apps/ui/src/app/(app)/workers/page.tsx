@@ -121,7 +121,7 @@ function RegionZoneGroup({
                 {ws.length} worker{ws.length === 1 ? '' : 's'}
               </span>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
               <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
                 <tr>
                   <th className="px-4 py-2">Status</th>
@@ -180,7 +180,7 @@ function RegionZoneGroup({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </div>
         ))}
     </div>

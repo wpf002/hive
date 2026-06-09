@@ -63,7 +63,7 @@ export default function DashboardPage() {
           <h2 className="font-semibold">Recent Jobs</h2>
           <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">All Jobs →</Link>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Status</th>
@@ -91,7 +91,7 @@ export default function DashboardPage() {
               <tr><td colSpan={5} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No jobs yet — run a bot to see them here</td></tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

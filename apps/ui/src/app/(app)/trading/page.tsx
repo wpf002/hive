@@ -153,7 +153,7 @@ function WalletsTab() {
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Exchange</th>
@@ -177,7 +177,7 @@ function WalletsTab() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
@@ -192,7 +192,7 @@ function TradesTab() {
 
   return (
     <div className="rounded-lg border border-hive-border bg-hive-surface">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
         <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
           <tr>
             <th className="px-4 py-2">Time</th>
@@ -224,7 +224,7 @@ function TradesTab() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }
@@ -239,7 +239,7 @@ function AuditTab() {
 
   return (
     <div className="rounded-lg border border-hive-border bg-hive-surface">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
         <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
           <tr>
             <th className="px-4 py-2">Time</th>
@@ -297,7 +297,7 @@ function AuditTab() {
             </>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }
@@ -314,7 +314,7 @@ function WatchersTab() {
   );
   return (
     <div className="rounded-lg border border-hive-border bg-hive-surface">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
         <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
           <tr>
             <th className="px-4 py-2">Started</th>
@@ -345,7 +345,7 @@ function WatchersTab() {
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }

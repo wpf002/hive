@@ -46,7 +46,7 @@ export default function SchedulesPage() {
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Bot</th>
@@ -109,7 +109,7 @@ export default function SchedulesPage() {
               <tr><td colSpan={7} className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No schedules. Click &ldquo;+ New Schedule&rdquo; to add one.</td></tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {createOpen && <CreateScheduleDialog onClose={() => setCreateOpen(false)} />}

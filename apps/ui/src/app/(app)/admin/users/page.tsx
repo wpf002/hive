@@ -126,7 +126,7 @@ export default function AdminUsersPage() {
             >Create</button>
           </div>
         )}
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Email</th>
@@ -159,12 +159,12 @@ export default function AdminUsersPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
         <div className="border-b border-hive-border px-4 py-2 font-mono text-[11px] uppercase text-hive-subtle">Audit log · 50 most recent</div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Time</th>
@@ -185,7 +185,7 @@ export default function AdminUsersPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

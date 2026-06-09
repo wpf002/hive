@@ -207,9 +207,9 @@ export default function AiConsolePage() {
         />
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-4 p-6">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12 gap-4 p-6">
         {/* Composer */}
-        <div className="col-span-5 flex min-h-0 flex-col gap-3 rounded-lg border border-hive-border bg-hive-surface p-4">
+        <div className="lg:col-span-5 flex min-h-0 flex-col gap-3 rounded-lg border border-hive-border bg-hive-surface p-4">
           <div>
             <button
               onClick={() => setSystemOpen((o) => !o)}
@@ -314,7 +314,7 @@ export default function AiConsolePage() {
         </div>
 
         {/* Results */}
-        <div className="col-span-5 min-h-0 rounded-lg border border-hive-border bg-hive-surface p-4">
+        <div className="lg:col-span-5 min-h-0 rounded-lg border border-hive-border bg-hive-surface p-4">
           {!jobId ? (
             <div className="flex h-full items-center justify-center rounded border border-dashed border-hive-border p-6 text-center font-mono text-sm text-hive-subtle">
               Run a prompt to see streaming logs and the rendered response here.
@@ -325,7 +325,7 @@ export default function AiConsolePage() {
         </div>
 
         {/* Recent runs */}
-        <div className="col-span-2 min-h-0 space-y-2 overflow-auto rounded-lg border border-hive-border bg-hive-surface p-3">
+        <div className="lg:col-span-2 min-h-0 space-y-2 overflow-auto rounded-lg border border-hive-border bg-hive-surface p-3">
           <div className="font-mono text-[11px] uppercase text-hive-subtle">Recent runs</div>
           <div className="space-y-1">
             {recent.data?.map((r) => (
@@ -362,7 +362,7 @@ export default function AiConsolePage() {
 
 function CostMeter({ totalCostCents, calls }: { totalCostCents: number; calls: number }) {
   return (
-    <div className="grid grid-cols-2 divide-x divide-hive-border overflow-hidden rounded-lg border border-hive-border bg-hive-bg">
+    <div className="grid grid-cols-1 sm:grid-cols-2 divide-x divide-hive-border overflow-hidden rounded-lg border border-hive-border bg-hive-bg">
       <div className="border-b border-hive-border px-4 py-1.5 text-center font-mono text-[10px] uppercase tracking-wider text-hive-subtle">
         Today
       </div>

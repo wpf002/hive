@@ -164,7 +164,7 @@ export default function BotDetailPage() {
 
         <div className="rounded-lg border border-hive-border bg-hive-surface">
           <div className="border-b border-hive-border px-4 py-3 font-semibold">Run History (last 10)</div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
             <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
               <tr>
                 <th className="px-4 py-2">Status</th>
@@ -184,7 +184,7 @@ export default function BotDetailPage() {
                 <tr><td colSpan={2} className="px-4 py-4 text-center font-mono text-xs text-hive-subtle">No runs yet</td></tr>
               )}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </div>
 

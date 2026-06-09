@@ -2,26 +2,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Sparkles, Menu, Clock, TrendingUp } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { cn } from '@/lib/cn';
-
-const NAV = [
-  { href: '/dashboard',  label: 'Dashboard',  icon: LayoutGrid },
-  { href: '/bots',       label: 'Bots',       icon: Bot },
-  { href: '/templates',  label: 'Templates',  icon: BookTemplate },
-  { href: '/jobs',       label: 'Jobs',       icon: ListChecks },
-  { href: '/schedules',  label: 'Schedules',  icon: Clock },
-  { href: '/trading',    label: 'Trading',    icon: TrendingUp },
-  { href: '/workers',    label: 'Workers',    icon: Cpu },
-  { href: '/ai-console', label: 'AI Console', icon: Sparkles },
-];
+import { NAV } from '@/lib/nav';
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   return (
+    // Desktop only — on small screens the MobileNav slide-over replaces this.
     <aside className={cn(
-      'flex flex-col border-r border-hive-border bg-hive-surface transition-all',
+      'hidden flex-col border-r border-hive-border bg-hive-surface transition-all md:flex',
       collapsed ? 'w-14' : 'w-56',
     )}>
       <div className="flex h-12 items-center gap-2 border-b border-hive-border px-3">
