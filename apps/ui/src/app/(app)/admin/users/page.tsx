@@ -68,9 +68,9 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-        <h1 className="text-2xl font-bold">Admin · Users</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Admin · Users</h1>
         <p className="mt-1 font-mono text-xs text-hive-subtle">ROLES · SESSIONS · AUDIT</p>
       </div>
 
@@ -126,7 +126,33 @@ export default function AdminUsersPage() {
             >Create</button>
           </div>
         )}
-        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+        {/* Mobile: stacked cards */}
+        <ul className="divide-y divide-hive-border md:hidden">
+          {users.data?.map((u) => (
+            <li key={u.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-xs">{u.email}</div>
+                  <div className="mt-0.5 truncate text-sm">{u.displayName}</div>
+                </div>
+                <span className={cn(
+                  'shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase',
+                  u.role === 'admin' ? 'border-honey-500/50 text-honey-500' : 'border-hive-border text-hive-subtle',
+                )}>{u.role}</span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-hive-subtle">
+                <span>created {fmtRelative(u.createdAt)}</span>
+                <span>login {u.lastLoginAt ? fmtRelative(u.lastLoginAt) : '—'}</span>
+              </div>
+              <button
+                onClick={() => reset(u)}
+                className="mt-2 rounded border border-hive-border px-2 py-0.5 font-mono text-[11px] text-hive-subtle hover:text-honey-500"
+              >Reset password</button>
+            </li>
+          ))}
+        </ul>
+        {/* Desktop: table */}
+        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Email</th>

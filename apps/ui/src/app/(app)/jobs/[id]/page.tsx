@@ -55,7 +55,7 @@ export default function JobDetailPage() {
   const j = job.data;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <Link href="/jobs" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← Jobs</Link>

@@ -57,9 +57,9 @@ export function CreateScheduleDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg space-y-3 rounded-lg border border-hive-border bg-hive-surface p-4"
+        className="max-h-[90vh] w-full max-w-lg space-y-3 overflow-auto rounded-lg border border-hive-border bg-hive-surface p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold">New Schedule</h2>

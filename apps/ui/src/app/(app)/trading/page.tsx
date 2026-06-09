@@ -44,22 +44,22 @@ function humanizeAction(action: string): string {
 export default function TradingPage() {
   const [tab, setTab] = useState<Tab>('wallets');
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-4 sm:p-6">
       <div className="flex items-baseline justify-between">
         <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-          <h1 className="text-2xl font-bold">Trading</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Trading</h1>
           <p className="mt-1 font-mono text-xs text-hive-subtle">PAPER MODE BY DEFAULT</p>
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-lg border border-hive-border bg-hive-surface px-2 pt-1">
+      <div className="flex gap-1 overflow-x-auto rounded-lg border border-hive-border bg-hive-surface px-2 pt-1">
         {(['wallets', 'trades', 'audit', 'watchers'] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              'rounded-t px-3 py-1.5 font-mono text-xs uppercase transition-colors',
+              'shrink-0 whitespace-nowrap rounded-t px-3 py-1.5 font-mono text-xs uppercase transition-colors',
               tab === t ? 'text-honey-500' : 'text-hive-subtle hover:bg-hive-muted',
             )}
           >
@@ -153,7 +153,23 @@ function WalletsTab() {
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
-        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+        {/* Mobile: stacked cards */}
+        <ul className="divide-y divide-hive-border md:hidden">
+          {wallets.data?.length === 0 && (
+            <li className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No paper wallets yet — seed one above.</li>
+          )}
+          {wallets.data?.map((w) => (
+            <li key={w.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <div className="font-mono text-sm capitalize">{w.exchange} <span className="text-hive-subtle">· {w.currency}</span></div>
+                <div className="mt-0.5 font-mono text-[11px] text-hive-subtle">{fmtRelative(w.updatedAt)}</div>
+              </div>
+              <div className="font-mono text-sm font-semibold text-honey-500">{fmtBalance(w.balance)}</div>
+            </li>
+          ))}
+        </ul>
+        {/* Desktop: table */}
+        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Exchange</th>
@@ -192,7 +208,29 @@ function TradesTab() {
 
   return (
     <div className="rounded-lg border border-hive-border bg-hive-surface">
-      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+      {/* Mobile: stacked cards */}
+      <ul className="divide-y divide-hive-border md:hidden">
+        {trades.data?.length === 0 && (
+          <li className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No paper trades yet.</li>
+        )}
+        {trades.data?.map((t) => (
+          <li key={t.id} className="px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-sm">{t.symbol}</span>
+              <span className={cn('font-mono text-xs uppercase', t.side === 'buy' ? 'text-emerald-400' : 'text-red-400')}>{t.side}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-hive-subtle">
+              <span>{t.exchange}</span>
+              <span>amt {t.amount}</span>
+              <span>@ {t.executedPrice ?? t.price ?? '—'}</span>
+              <span>{t.status}</span>
+              <span>{fmtRelative(t.createdAt)}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {/* Desktop: table */}
+      <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
         <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
           <tr>
             <th className="px-4 py-2">Time</th>

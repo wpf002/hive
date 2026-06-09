@@ -35,10 +35,10 @@ export default function BotsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-          <h1 className="text-2xl font-bold">Bots</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Bots</h1>
           <p className="mt-1 font-mono text-xs text-hive-subtle">INSTANTIATED TEMPLATES</p>
         </div>
         {isAdmin && (

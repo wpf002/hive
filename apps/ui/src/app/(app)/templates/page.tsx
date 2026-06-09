@@ -11,9 +11,9 @@ export default function TemplatesPage() {
   });
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-        <h1 className="text-2xl font-bold">Templates</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Templates</h1>
         <p className="mt-1 font-mono text-xs text-hive-subtle">READ-ONLY LIBRARY</p>
       </div>
       <div className="space-y-3">

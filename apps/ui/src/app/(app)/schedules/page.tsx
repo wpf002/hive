@@ -29,10 +29,10 @@ export default function SchedulesPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div className="flex-1 rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-          <h1 className="text-2xl font-bold">Schedules</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Schedules</h1>
           <p className="mt-1 font-mono text-xs text-hive-subtle">CRON-DRIVEN BOT RUNS</p>
         </div>
         {isAdmin && (
@@ -46,7 +46,49 @@ export default function SchedulesPage() {
       </div>
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
-        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+        {/* Mobile: stacked cards */}
+        <ul className="divide-y divide-hive-border md:hidden">
+          {schedules.data?.map((s) => (
+            <li key={s.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{s.bot?.name ?? s.botId.slice(0, 8)}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    {s.bot?.template && <PoolBadge pool={s.bot.template.poolType} />}
+                    <span className="font-mono text-[11px] text-hive-subtle">{s.cron}</span>
+                  </div>
+                </div>
+                {isAdmin ? (
+                  <button
+                    onClick={() => toggle(s)}
+                    className={`shrink-0 rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                      s.enabled ? 'border-emerald-500/30 text-emerald-400' : 'border-zinc-500/30 text-zinc-400'
+                    }`}
+                  >{s.enabled ? 'on' : 'off'}</button>
+                ) : (
+                  <span className={`shrink-0 rounded border px-2 py-0.5 font-mono text-[10px] uppercase ${
+                    s.enabled ? 'border-emerald-500/30 text-emerald-400' : 'border-zinc-500/30 text-zinc-400'
+                  }`}>{s.enabled ? 'on' : 'off'}</span>
+                )}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-hive-subtle">
+                <span>next {s.nextRunAt ? fmtDateTime(s.nextRunAt) : '—'}</span>
+                <span>last {s.lastRunAt ? fmtRelative(s.lastRunAt) : '—'}</span>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => remove(s)}
+                  className="mt-2 rounded border border-red-500/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                >delete</button>
+              )}
+            </li>
+          ))}
+          {schedules.data && schedules.data.length === 0 && (
+            <li className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No schedules. Tap &ldquo;+ New Schedule&rdquo; to add one.</li>
+          )}
+        </ul>
+        {/* Desktop: table */}
+        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Bot</th>

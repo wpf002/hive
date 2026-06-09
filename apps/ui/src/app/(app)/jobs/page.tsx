@@ -49,9 +49,9 @@ export default function JobsPage() {
   }
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-4 sm:p-6">
       <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-        <h1 className="text-2xl font-bold">Jobs</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Jobs</h1>
         <p className="mt-1 font-mono text-xs text-hive-subtle">EVERY EXECUTION</p>
       </div>
 
@@ -95,7 +95,30 @@ export default function JobsPage() {
       {tab === 'jobs' && (
         <>
           <div className="rounded-lg border border-hive-border bg-hive-surface">
-            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+            {/* Mobile: stacked cards */}
+            <ul className="divide-y divide-hive-border md:hidden">
+              {jobs.data?.map((j) => (
+                <li key={j.id}>
+                  <Link href={`/jobs/${j.id}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-hive-muted/40">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{j.bot?.name ?? j.botId.slice(0, 8)}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-hive-subtle">
+                        {j.bot?.template && <PoolBadge pool={j.bot.template.poolType} />}
+                        <span>{fmtRelative(j.createdAt)}</span>
+                        <span>· {fmtDuration(j.startedAt, j.finishedAt)}</span>
+                        <span>· {j.attempts}/{j.maxAttempts}</span>
+                      </div>
+                    </div>
+                    <StatusBadge status={j.status} />
+                  </Link>
+                </li>
+              ))}
+              {jobs.data && jobs.data.length === 0 && (
+                <li className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No jobs</li>
+              )}
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
               <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
                 <tr>
                   <th className="px-4 py-2">Status</th>

@@ -73,12 +73,12 @@ export default function BotDetailPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <Link href="/bots" className="font-mono text-xs text-hive-subtle hover:text-honey-500">← Bots</Link>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">{bot.data.name}</h1>
+            <h1 className="text-xl font-bold sm:text-2xl">{bot.data.name}</h1>
             {bot.data.template && <PoolBadge pool={bot.data.template.poolType} />}
           </div>
           <div className="font-mono text-xs text-hive-subtle">{bot.data.template?.name}</div>

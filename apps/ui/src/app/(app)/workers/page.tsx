@@ -53,9 +53,9 @@ export default function WorkersPage() {
   }, [workers.data]);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-        <h1 className="text-2xl font-bold">Workers</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Workers</h1>
         <p className="mt-1 font-mono text-xs text-hive-subtle">HEARTBEATS EVERY 10S · OFFLINE AFTER 30S SILENCE · GROUPED BY REGION/ZONE</p>
       </div>
 
@@ -121,7 +121,46 @@ function RegionZoneGroup({
                 {ws.length} worker{ws.length === 1 ? '' : 's'}
               </span>
             </div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+            {/* Mobile: stacked cards */}
+            <ul className="divide-y divide-hive-border md:hidden">
+              {ws.map((w) => (
+                <li key={w.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] uppercase',
+                        w.status === 'online'
+                          ? 'border-emerald-500/30 text-emerald-400'
+                          : w.status === 'draining'
+                            ? 'border-amber-500/30 text-amber-400'
+                            : 'border-zinc-500/30 text-zinc-400',
+                      )}
+                    >
+                      <span className={cn('h-1.5 w-1.5 rounded-full', w.status === 'online' ? 'bg-emerald-400' : 'bg-zinc-500')} />
+                      {w.status}
+                    </span>
+                    {w.status === 'online' && (
+                      <button
+                        type="button"
+                        onClick={() => onStop(w)}
+                        className="rounded border border-amber-500/30 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-500/10"
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-1.5 truncate font-mono text-xs">{w.id}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-hive-subtle">
+                    <span>{w.hostname}</span>
+                    <span>cap {w.capacity}</span>
+                    <span>active {w.activeJobs}</span>
+                    <span>{fmtRelative(w.lastSeenAt)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
               <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
                 <tr>
                   <th className="px-4 py-2">Status</th>

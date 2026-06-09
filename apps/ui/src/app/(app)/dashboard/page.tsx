@@ -46,12 +46,12 @@ export default function DashboardPage() {
   const onlineWorkers = workers.data?.filter((w) => w.status === 'online').length ?? 0;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="rounded-lg border border-hive-border bg-hive-surface px-4 py-3">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Dashboard</h1>
         <p className="mt-1 font-mono text-xs text-hive-subtle">HIVE CONTROL PLANE</p>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Running" value={running.data?.length ?? 0} />
         <Stat label="Queued" value={queued.data?.length ?? 0} />
         <Stat label="Workers online" value={onlineWorkers} hint={`OF ${workers.data?.length ?? 0} TOTAL`} />
@@ -63,7 +63,30 @@ export default function DashboardPage() {
           <h2 className="font-semibold">Recent Jobs</h2>
           <Link href="/jobs" className="font-mono text-xs text-honey-500 hover:underline">All Jobs →</Link>
         </div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-sm">
+
+        {/* Mobile: stacked cards */}
+        <ul className="divide-y divide-hive-border md:hidden">
+          {recent.data?.map((j) => (
+            <li key={j.id}>
+              <Link href={`/jobs/${j.id}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-hive-muted/40">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{j.bot?.name ?? j.botId.slice(0, 8)}</div>
+                  <div className="mt-1 flex items-center gap-2">
+                    {j.bot?.template && <PoolBadge pool={j.bot.template.poolType} />}
+                    <span className="font-mono text-[11px] text-hive-subtle">{fmtRelative(j.createdAt)}</span>
+                  </div>
+                </div>
+                <StatusBadge status={j.status} />
+              </Link>
+            </li>
+          ))}
+          {recent.data && recent.data.length === 0 && (
+            <li className="px-4 py-6 text-center font-mono text-xs text-hive-subtle">No jobs yet — run a bot to see them here</li>
+          )}
+        </ul>
+
+        {/* Desktop: table */}
+        <div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[680px] text-sm">
           <thead className="text-left font-mono text-[10px] uppercase text-hive-subtle">
             <tr>
               <th className="px-4 py-2">Status</th>

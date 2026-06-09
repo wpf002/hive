@@ -52,7 +52,7 @@ export function StatusBar() {
   const redisOk = health.data?.checks?.redis?.ok;
 
   return (
-    <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-hive-border bg-hive-bg px-3">
+    <footer className="hidden h-8 shrink-0 items-center gap-2 border-t border-hive-border bg-hive-bg px-3 sm:flex">
       <Pill label="API"   ok={apiOk} />
       <Pill label="PG"    ok={!!pgOk} />
       <Pill label="Redis" ok={!!redisOk} />

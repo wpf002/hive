@@ -198,7 +198,7 @@ export default function AiConsolePage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-hive-border bg-hive-surface px-6 py-3">
         <div>
-          <h1 className="text-2xl font-bold">AI Console</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">AI Console</h1>
           <p className="font-mono text-xs text-hive-subtle">PROMPT · STREAM · COMPARE PROVIDERS</p>
         </div>
         <CostMeter
