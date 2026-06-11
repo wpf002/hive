@@ -30,7 +30,9 @@ const TEMPLATES: SeedTemplate[] = [
         },
       },
     },
-    defaultConfig: { league: 'nfl', dateOffset: 0 },
+    // Default to an in-season league so a fresh run returns real games rather
+    // than an empty list (NFL is dark spring–summer; MLB plays daily Apr–Oct).
+    defaultConfig: { league: 'mlb', dateOffset: 0 },
   },
   {
     name: 'Sportsbook Line Scraper',
@@ -52,7 +54,7 @@ const TEMPLATES: SeedTemplate[] = [
     },
     defaultConfig: {
       book: 'draftkings',
-      league: 'nfl',
+      league: 'mlb',
       markets: ['moneyline', 'spread', 'total'],
     },
   },
@@ -173,7 +175,10 @@ const TEMPLATES: SeedTemplate[] = [
         maxSlippagePct: { type: 'number', default: 1.0, description: 'Reject fill if price moved >x% from quote' },
       },
     },
-    defaultConfig: { exchange: 'binance', symbol: 'BTC/USDT', side: 'buy', amount: 0.001, mode: 'paper', maxSlippagePct: 1.0 },
+    // Default to Kraken: Binance returns HTTP 451 (geo-blocked) from most cloud
+    // regions, which makes even paper trades fail on the price lookup. Kraken's
+    // public API is reachable and BTC/USD is its most liquid pair.
+    defaultConfig: { exchange: 'kraken', symbol: 'BTC/USD', side: 'buy', amount: 0.001, mode: 'paper', maxSlippagePct: 1.0 },
   },
   {
     name: 'Trading Portfolio Snapshot',
@@ -192,7 +197,7 @@ const TEMPLATES: SeedTemplate[] = [
         includeUsd: { type: 'boolean', default: true },
       },
     },
-    defaultConfig: { exchange: 'binance', mode: 'paper', includeUsd: true },
+    defaultConfig: { exchange: 'kraken', mode: 'paper', includeUsd: true },
   },
   {
     name: 'Arbitrage Watcher',
@@ -214,7 +219,7 @@ const TEMPLATES: SeedTemplate[] = [
         alertWebhookUrl: { type: 'string', format: 'uri' },
       },
     },
-    defaultConfig: { exchanges: ['binance', 'kraken'], symbol: 'BTC/USDT', minSpreadPct: 0.5, durationSeconds: 60 },
+    defaultConfig: { exchanges: ['kraken', 'coinbase'], symbol: 'BTC/USD', minSpreadPct: 0.5, durationSeconds: 60 },
   },
   // ============ mcp_host (Phase 4a) ============
   {

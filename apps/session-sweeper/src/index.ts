@@ -92,11 +92,30 @@ async function sweep(): Promise<void> {
   }
 }
 
+// Reap Worker rows that stopped heartbeating long ago. The API already flips a
+// missed-heartbeat worker to status='offline' on read; this is the second stage
+// that removes the dead row entirely, so the Workers page reflects the live
+// fleet instead of a graveyard of restarted/torn-down workers.
+async function reapWorkers(): Promise<void> {
+  if (env.WORKER_REAP_AFTER_S === 0) return;
+  try {
+    const cutoff = new Date(Date.now() - env.WORKER_REAP_AFTER_S * 1000);
+    const res = await prisma.worker.deleteMany({ where: { lastSeenAt: { lt: cutoff } } });
+    if (res.count > 0) {
+      app.log.info({ deleted: res.count, olderThanSeconds: env.WORKER_REAP_AFTER_S }, 'workers_reaped');
+    }
+  } catch (err) {
+    app.log.error({ err }, 'worker_reap_failed');
+  }
+}
+
 try {
   await app.listen({ port: env.SESSION_SWEEPER_PORT, host: '0.0.0.0' });
   app.log.info({ port: env.SESSION_SWEEPER_PORT, intervalSeconds: env.SESSION_SWEEP_INTERVAL_S }, 'started');
   void sweep(); // run once at boot so the healthcheck shows a recent run quickly
+  void reapWorkers();
   setInterval(() => void sweep(), env.SESSION_SWEEP_INTERVAL_S * 1000);
+  setInterval(() => void reapWorkers(), env.SESSION_SWEEP_INTERVAL_S * 1000);
   // Phase 6b: audit alerting (no-op unless HIVE_AUDIT_ALERT_EMAIL is set).
   startAuditAlerts(app.log);
 } catch (err) {
