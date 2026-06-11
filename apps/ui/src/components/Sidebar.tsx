@@ -28,23 +28,28 @@ export function Sidebar() {
         )}
       </div>
       <nav className="flex-1 space-y-1 p-2">
-        {NAV.map((item) => {
+        {NAV.map((item, i) => {
           const Icon = item.icon;
           const active = pathname?.startsWith(item.href);
+          // Hairline divider at each lifecycle-group boundary.
+          const newGroup = i > 0 && NAV[i - 1].group !== item.group;
           return (
-            <Link key={item.href} href={item.href}>
-              <div
-                className={cn(
-                  'flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors',
-                  active
-                    ? 'bg-honey-500/10 text-honey-500'
-                    : 'text-hive-subtle hover:bg-hive-muted hover:text-hive-text',
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
-              </div>
-            </Link>
+            <div key={item.href}>
+              {newGroup && <div className="mx-2 my-1.5 border-t border-hive-border" aria-hidden />}
+              <Link href={item.href}>
+                <div
+                  className={cn(
+                    'flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors',
+                    active
+                      ? 'bg-honey-500/10 text-honey-500'
+                      : 'text-hive-subtle hover:bg-hive-muted hover:text-hive-text',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+                </div>
+              </Link>
+            </div>
           );
         })}
       </nav>
