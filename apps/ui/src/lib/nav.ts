@@ -1,4 +1,4 @@
-import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Sparkles, Clock, TrendingUp, type LucideIcon } from 'lucide-react';
+import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Sparkles, Wand2, Clock, TrendingUp, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   href: string;
@@ -10,6 +10,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { href: '/dashboard',  label: 'Dashboard',  icon: LayoutGrid },
   { href: '/bots',       label: 'Bots',       icon: Bot },
+  { href: '/bot-builder', label: 'AI Builder', icon: Wand2 },
   { href: '/templates',  label: 'Templates',  icon: BookTemplate },
   { href: '/jobs',       label: 'Jobs',       icon: ListChecks },
   { href: '/schedules',  label: 'Schedules',  icon: Clock },

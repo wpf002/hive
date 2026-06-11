@@ -43,6 +43,12 @@ const Env = z.object({
   // comma-separated (e.g. "https://admin.example.com,https://staging.example.com").
   // HIVE_PUBLIC_APP_URL is always allowed; localhost is auto-allowed in dev.
   HIVE_CORS_ORIGINS: z.string().optional(),
+  // AI bot builder: lets operators describe a bot in plain English and have
+  // Claude pick the best-fit template + fill its config. Optional — when unset,
+  // POST /api/bot-builder/suggest returns 503 and the feature is hidden in the
+  // UI. Reuses ANTHROPIC_API_KEY if the ai_agent worker key is shared.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  HIVE_BOT_BUILDER_MODEL: z.string().default('claude-sonnet-4-5'),
   // Phase 6b (optional): if set, critical audit events email this address. The
   // session-sweeper service runs the polling job; the API tolerates the var so
   // env validation stays uniform across services.

@@ -26,6 +26,7 @@
     "smoke:phase5b": "tsx --env-file-if-exists=../../.env src/scripts/smoke-phase5b.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
     "@fastify/cookie": "^9.3.0",
     "@fastify/cors": "^9.0.0",
     "@hive/crypto": "workspace:*",
