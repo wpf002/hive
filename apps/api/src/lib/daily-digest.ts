@@ -154,6 +154,21 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
+// Human-readable timestamp in US Eastern (the report's delivery timezone),
+// e.g. "Jun 12, 2026, 7:30 AM EDT". The tz database handles EDT/EST so the
+// label is always correct without us tracking daylight saving.
+function fmtWhen(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
 // Minimal markdown → HTML for the AI section (bold + line breaks only).
 function mdToHtml(md: string): string {
   return esc(md)
@@ -164,7 +179,7 @@ function mdToHtml(md: string): string {
 
 export function renderDigestText(d: Digest): string {
   const t = d.totals;
-  const head = `Hive daily report\n${d.windowStart} → ${d.windowEnd}\n\n${t.runs} runs across ${t.ran}/${t.bots} bots — ${t.succeeded} ok, ${t.failed} failed, ${t.idle} idle.\n`;
+  const head = `Hive daily report\n${fmtWhen(d.windowStart)} → ${fmtWhen(d.windowEnd)}\n\n${t.runs} runs across ${t.ran}/${t.bots} bots — ${t.succeeded} ok, ${t.failed} failed, ${t.idle} idle.\n`;
   const rows = d.bots
     .map((s) => `${s.pool}/${s.botName}: ${s.runs} runs (${s.succeeded} ok, ${s.failed} fail)` +
       (s.lastResultSummary ? ` — ${s.lastResultSummary}` : s.runs === 0 ? ' — no runs' : '') +
@@ -207,7 +222,7 @@ export function renderDigestHtml(d: Digest): string {
   return `<div style="background:#0a0a0a;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#eaeaea">
     <div style="max-width:680px;margin:0 auto">
       <div style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#fbbf24;font-size:18px">🐝 HIVE — Daily Report</div>
-      <div style="color:#9a9a9a;font-size:12px;margin-top:2px">${esc(d.windowStart.slice(0, 16))} → ${esc(d.windowEnd.slice(0, 16))} UTC</div>
+      <div style="color:#9a9a9a;font-size:12px;margin-top:2px">${esc(fmtWhen(d.windowStart))} → ${esc(fmtWhen(d.windowEnd))}</div>
       <table style="margin:16px 0;background:#161616;border:1px solid #2a2a2a;border-radius:8px;border-collapse:separate"><tr>
         ${stat('runs', t.runs, '#eaeaea')}${stat('ok', t.succeeded, '#34d399')}${stat('failed', t.failed, t.failed ? '#f87171' : '#eaeaea')}${stat('bots ran', `${t.ran}/${t.bots}`, '#fbbf24')}
       </tr></table>

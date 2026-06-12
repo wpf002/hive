@@ -319,7 +319,9 @@ const TEMPLATES: SeedTemplate[] = [
         registryPassword: { type: 'string', format: 'password', 'x-secret': true },
       },
     },
-    defaultConfig: { repoUrl: '', ref: 'main', dockerfilePath: 'Dockerfile', buildContext: '.', imageTag: 'hive-build:latest' },
+    // A small public repo with a root Dockerfile so a fresh bot builds out of
+    // the box (verified: builds on a Docker-enabled ci_agent host).
+    defaultConfig: { repoUrl: 'https://github.com/docker/welcome-to-docker', ref: 'main', dockerfilePath: 'Dockerfile', buildContext: '.', imageTag: 'hive-build:latest' },
   },
   {
     name: 'Shell Command Runner',
