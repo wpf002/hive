@@ -259,7 +259,8 @@ const TEMPLATES: SeedTemplate[] = [
         toolArgs: { type: 'object', additionalProperties: true },
       },
     },
-    defaultConfig: { mcpServerUrl: 'http://localhost:4200/sse', toolName: 'cron_heartbeat', toolArgs: { label: 'mcp-test' } },
+    // 127.0.0.1 (explicit IPv4) avoids the localhost→::1 detour; the server binds IPv4.
+    defaultConfig: { mcpServerUrl: 'http://127.0.0.1:4200/sse', toolName: 'cron_heartbeat', toolArgs: { label: 'mcp-test' } },
   },
   {
     name: 'MCP Server Health Check',
@@ -275,7 +276,7 @@ const TEMPLATES: SeedTemplate[] = [
         expectedTools: { type: 'array', items: { type: 'string' }, default: [] },
       },
     },
-    defaultConfig: { mcpServerUrl: 'http://localhost:4200/sse', expectedTools: [] },
+    defaultConfig: { mcpServerUrl: 'http://127.0.0.1:4200/sse', expectedTools: [] },
   },
   // ============ ci_agent (Phase 4a) ============
   {
