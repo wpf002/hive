@@ -18,6 +18,7 @@ export interface BotStat {
   succeeded: number;
   failed: number;
   other: number; // queued/running/cancelled at snapshot time
+  latestStatus: string | null; // status of the most recent run in the window
   lastResultSummary: string | null;
   errorSamples: string[];
 }
@@ -72,6 +73,7 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
       succeeded: 0,
       failed: 0,
       other: 0,
+      latestStatus: null,
       lastResultSummary: null,
       errorSamples: [],
     });
@@ -81,6 +83,7 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
     const s = statByBot.get(j.botId);
     if (!s) continue; // bot deleted but job lingered
     s.runs += 1;
+    s.latestStatus = j.status; // jobs are asc → ends on the most recent run
     if (j.status === 'succeeded') {
       s.succeeded += 1;
       const summary = summarizeResult(j.result);
@@ -97,7 +100,10 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
 
   const all = [...statByBot.values()];
   const ran = all.filter((s) => s.runs > 0);
-  const failing = all.filter((s) => s.failed > 0).sort((a, b) => b.failed - a.failed);
+  // "failing" = currently broken (most recent run failed), NOT merely failed
+  // once in the window — a bot that failed then recovered shouldn't generate a
+  // fix recommendation. This drives the AI lessons-learned section.
+  const failing = all.filter((s) => s.latestStatus === 'failed').sort((a, b) => b.failed - a.failed);
   const totals = {
     bots: all.length,
     ran: ran.length,
@@ -128,10 +134,10 @@ export async function generateLessonsLearned(digest: Digest): Promise<string | n
 
   const lines = digest.failing.map((s) => {
     const errs = s.errorSamples.length ? s.errorSamples.join(' | ') : '(no error text captured)';
-    return `- ${s.botName} [pool=${s.pool}, template=${s.templateName}] — ${s.failed}/${s.runs} runs failed. Errors: ${errs}`;
+    return `- ${s.botName} [pool=${s.pool}, template=${s.templateName}] — most recent run failed (${s.failed}/${s.runs} failed today). Errors: ${errs}`;
   });
 
-  const prompt = `These Hive bots failed at least once in the last 24h:\n\n${lines.join('\n')}\n\nFor EACH bot, give a one-line likely cause and a concrete recommended fix. Prefer config/operational fixes (missing API key, service offline, geo-blocked exchange, Docker not running, out-of-season data, wrong URL) over code changes. Be specific and brief. Format as a markdown bullet per bot: "**Bot name** — cause. Fix: …". Do not suggest enabling live trading or anything that spends real money.`;
+  const prompt = `These Hive bots are currently broken — their most recent run in the last 24h failed:\n\n${lines.join('\n')}\n\nFor EACH bot, give a one-line likely cause and a concrete recommended fix. Prefer config/operational fixes (missing API key, service offline, geo-blocked exchange, Docker not running, out-of-season data, wrong URL) over code changes. Be specific and brief. Format as a markdown bullet per bot: "**Bot name** — cause. Fix: …". Do not suggest enabling live trading or anything that spends real money.`;
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
@@ -183,7 +189,7 @@ export function renderDigestText(d: Digest): string {
   const rows = d.bots
     .map((s) => `${s.pool}/${s.botName}: ${s.runs} runs (${s.succeeded} ok, ${s.failed} fail)` +
       (s.lastResultSummary ? ` — ${s.lastResultSummary}` : s.runs === 0 ? ' — no runs' : '') +
-      (s.errorSamples.length ? ` — ERR: ${s.errorSamples[0]}` : ''))
+      (s.latestStatus === 'failed' && s.errorSamples.length ? ` — ERR: ${s.errorSamples[0]}` : ''))
     .join('\n');
   const ll = d.lessonsLearned ? `\n\nLessons learned\n${d.lessonsLearned}` : '';
   return `${head}\n${rows}${ll}\n`;
@@ -196,12 +202,15 @@ export function renderDigestHtml(d: Digest): string {
 
   const row = (s: BotStat) => {
     const ratePct = s.runs ? Math.round((s.succeeded / s.runs) * 100) : null;
+    const broken = s.latestStatus === 'failed';
     const status =
       s.runs === 0 ? '<span style="color:#9a9a9a">no runs</span>'
+      : broken ? '<span style="color:#f87171">failing</span>'
       : s.failed === 0 ? `<span style="color:#34d399">${ratePct}% ok</span>`
-      : s.succeeded === 0 ? `<span style="color:#f87171">all failed</span>`
-      : `<span style="color:#fbbf24">${ratePct}% ok</span>`;
-    const detail = s.errorSamples.length
+      : `<span style="color:#fbbf24">recovered (${ratePct}% ok)</span>`;
+    // Show the error only while the bot is currently broken; a recovered bot
+    // shows its latest good result instead of a stale red error.
+    const detail = broken && s.errorSamples.length
       ? `<span style="color:#f87171">${esc(s.errorSamples[0])}</span>`
       : s.lastResultSummary ? esc(s.lastResultSummary) : '<span style="color:#9a9a9a">—</span>';
     return `<tr style="border-top:1px solid #2a2a2a">
@@ -215,8 +224,8 @@ export function renderDigestHtml(d: Digest): string {
   const lessons = d.lessonsLearned
     ? `<h2 style="font-size:15px;color:#fbbf24;margin:24px 0 8px">Lessons learned</h2>
        <div style="background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:14px;font-size:13px;line-height:1.6;color:#dcdcdc">${mdToHtml(d.lessonsLearned)}</div>`
-    : d.totals.failed === 0
-      ? `<p style="color:#34d399;font-size:13px;margin-top:20px">✓ No failures in the last 24h — every bot that ran came back clean.</p>`
+    : d.failing.length === 0
+      ? `<p style="color:#34d399;font-size:13px;margin-top:20px">✓ No bots are currently failing — everything that ran is healthy on its latest run.</p>`
       : '';
 
   return `<div style="background:#0a0a0a;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#eaeaea">
