@@ -49,6 +49,10 @@ const Env = z.object({
   // UI. Reuses ANTHROPIC_API_KEY if the ai_agent worker key is shared.
   ANTHROPIC_API_KEY: z.string().optional(),
   HIVE_BOT_BUILDER_MODEL: z.string().default('claude-sonnet-4-5'),
+  // Daily digest: where the once-a-day bot-effectiveness report is emailed.
+  // When unset, the report still generates (and logs) but isn't sent. Real
+  // delivery also needs HIVE_EMAIL_PROVIDER=resend + RESEND_* (below).
+  HIVE_DAILY_REPORT_EMAIL: z.string().optional(),
   // Phase 6b (optional): if set, critical audit events email this address. The
   // session-sweeper service runs the polling job; the API tolerates the var so
   // env validation stays uniform across services.

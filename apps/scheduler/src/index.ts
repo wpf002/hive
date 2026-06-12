@@ -132,6 +132,41 @@ async function tick(): Promise<void> {
   }
 }
 
+// --- daily digest -----------------------------------------------------------
+// The scheduler fires bots; it also nudges the API to build+email the daily
+// bot-effectiveness report once a day. All the heavy lifting (aggregation, AI
+// lessons-learned, email) lives in the API — here we just POST on a cron.
+let nextDigestAt: Date | null = null;
+
+async function triggerDigest(): Promise<void> {
+  const r = await fetch(`${env.API_BASE_URL.replace(/\/$/, '')}/api/reports/daily-digest`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.API_AUTH_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(60_000), // the AI lessons-learned step can take a bit
+  });
+  const body = (await r.text()).slice(0, 300);
+  if (r.ok) app.log.info({ status: r.status }, 'daily_digest_sent');
+  else app.log.warn({ status: r.status, body }, 'daily_digest_failed');
+}
+
+async function digestTick(): Promise<void> {
+  if (env.DAILY_DIGEST_ENABLED !== 'true') return;
+  const now = new Date();
+  if (!nextDigestAt) {
+    nextDigestAt = computeNext(env.DAILY_DIGEST_CRON, now);
+    return;
+  }
+  if (now < nextDigestAt) return;
+  // Advance first so a slow/failed send can't double-fire on the next tick.
+  nextDigestAt = computeNext(env.DAILY_DIGEST_CRON, now);
+  try {
+    await triggerDigest();
+  } catch (err) {
+    app.log.error({ err }, 'daily_digest_tick_error');
+  }
+}
+
 async function backfillNextRunAt(): Promise<void> {
   const rows = await prisma.schedule.findMany({ where: { enabled: true, nextRunAt: null } });
   for (const r of rows) {
@@ -149,8 +184,12 @@ try {
   await backfillNextRunAt();
   await loadSchedules();
 
+  nextDigestAt = computeNext(env.DAILY_DIGEST_CRON);
+  app.log.info({ nextDigestAt, enabled: env.DAILY_DIGEST_ENABLED }, 'daily_digest_armed');
+
   setInterval(() => void tick().catch((err) => app.log.error({ err }, 'tick_loop_failed')), TICK_MS);
   setInterval(() => void loadSchedules().catch((err) => app.log.error({ err }, 'reload_failed')), RELOAD_MS);
+  setInterval(() => void digestTick().catch((err) => app.log.error({ err }, 'digest_loop_failed')), TICK_MS);
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');
   process.exit(1);
