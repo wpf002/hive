@@ -172,10 +172,17 @@ export const hiveMcpServerHandler: Handler = async (rawConfig, { log }) => {
     bots.push(await getBot(id));
   }
 
-  const server = new McpServer({ name: 'hive-mcp', version: '0.1.0' });
   let toolCallCount = 0;
 
-  for (const bot of bots) {
+  // Build a FRESH McpServer per SSE connection. The SDK's Server (Protocol)
+  // only supports ONE transport at a time, so sharing a single instance makes
+  // a 2nd concurrent client's connect() throw "Already connected to a
+  // transport" — its response never gets headers and the client hangs until a
+  // Headers Timeout. A new instance per connection lets concurrent clients in.
+  function buildServer(): McpServer {
+    const server = new McpServer({ name: 'hive-mcp', version: '0.1.0' });
+
+    for (const bot of bots) {
     const toolName = slugifyToolName(bot.name);
     const description = bot.template.description ?? `Invoke Hive bot "${bot.name}"`;
     const jsonInputSchema = buildToolInputSchema(bot.template, bot.config);
@@ -232,6 +239,9 @@ export const hiveMcpServerHandler: Handler = async (rawConfig, { log }) => {
         }
       },
     );
+    }
+
+    return server;
   }
 
   const transports = new Map<string, SSEServerTransport>();
@@ -262,9 +272,17 @@ export const hiveMcpServerHandler: Handler = async (rawConfig, { log }) => {
     if (req.method === 'GET' && url.pathname === '/sse') {
       const transport = new SSEServerTransport('/messages', res);
       transports.set(transport.sessionId, transport);
-      transport.onclose = () => transports.delete(transport.sessionId);
+      // One server instance per connection (see buildServer) so concurrent
+      // clients don't collide on a single shared Protocol. We don't call
+      // connServer.close() here — the transport is already closing, and
+      // closing the server would re-close the transport and recurse. Dropping
+      // the map ref is enough; the per-connection server is then GC'd.
+      const connServer = buildServer();
+      transport.onclose = () => {
+        transports.delete(transport.sessionId);
+      };
       try {
-        await server.connect(transport);
+        await connServer.connect(transport);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         await log.error('mcp.connect_failed', { error: msg });
