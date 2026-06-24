@@ -6,6 +6,8 @@ import { env } from '../env.js';
 import {
   buildDigest,
   generateLessonsLearned,
+  getLastDigestRun,
+  saveDigestRun,
   renderDigestHtml,
   renderDigestText,
 } from '../lib/daily-digest.js';
@@ -21,9 +23,14 @@ export async function reportRoutes(app: FastifyInstance) {
   // this daily; it can also be hit manually to preview or force a send.
   app.post('/api/reports/daily-digest', { preHandler: requireRole('admin') }, async (req, reply) => {
     const q = Query.parse(req.query);
-    const digest = await buildDigest();
+
+    const [digest, previousRun] = await Promise.all([
+      buildDigest(),
+      getLastDigestRun(),
+    ]);
+
     try {
-      digest.lessonsLearned = await generateLessonsLearned(digest);
+      digest.lessonsLearned = await generateLessonsLearned(digest, previousRun);
     } catch (e) {
       req.log.warn({ err: e }, 'lessons_learned_failed');
       digest.lessonsLearned = null;
@@ -50,6 +57,20 @@ export async function reportRoutes(app: FastifyInstance) {
       }
     }
 
+    // Persist snapshot for tomorrow's feedback loop (even on dry runs, so
+    // manual previews still seed the recovery context).
+    try {
+      await saveDigestRun(digest);
+    } catch (e) {
+      req.log.warn({ err: e }, 'digest_run_save_failed');
+    }
+
+    const recoveredCount = previousRun
+      ? previousRun.failingBots.filter(
+          (snap) => !digest.failing.find((s) => s.botId === snap.botId),
+        ).length
+      : 0;
+
     return reply.send({
       ...digest,
       delivery: {
@@ -63,6 +84,11 @@ export async function reportRoutes(app: FastifyInstance) {
             ? undefined
             : 'HIVE_EMAIL_PROVIDER is not "resend" — the report was rendered/logged but not actually sent.'
           : 'HIVE_DAILY_REPORT_EMAIL is unset — nowhere to send the report.',
+      },
+      learningContext: {
+        previousRunAt: previousRun?.windowEnd ?? null,
+        previouslyFailing: previousRun?.failingBots.length ?? 0,
+        recoveredSinceLastRun: recoveredCount,
       },
     });
   });

@@ -262,3 +262,20 @@ model AuditLog {
   @@index([userId, createdAt])
   @@index([action, createdAt])
 }
+
+// ============ Digest history (learning loop) ============
+
+// One row per daily digest run. Stores which bots were failing and what Claude
+// recommended so tomorrow's digest can identify recoveries and carry forward
+// unresolved recommendations.
+model DigestRun {
+  id             String   @id @default(cuid())
+  // windowEnd is "now" at digest time — unique so upsert works on manual re-runs.
+  windowEnd      DateTime @unique
+  // JSON array of BotFailSnapshot: { botId, botName, pool, errorSamples, lessonText }
+  failingBots    Json
+  lessonsLearned String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}

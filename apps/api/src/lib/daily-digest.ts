@@ -32,6 +32,23 @@ export interface Digest {
   lessonsLearned: string | null;
 }
 
+// Snapshot of a single failing bot stored in DigestRun for next-day comparison.
+export interface BotFailSnapshot {
+  botId: string;
+  botName: string;
+  pool: string;
+  errorSamples: string[];
+  lessonText: string | null; // Claude's per-bot recommendation from that day
+}
+
+export interface DigestRunRecord {
+  id: string;
+  windowEnd: Date;
+  failingBots: BotFailSnapshot[];
+  lessonsLearned: string | null;
+  createdAt: Date;
+}
+
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_ERR_SAMPLES = 3;
 
@@ -39,7 +56,6 @@ function summarizeResult(result: unknown): string | null {
   if (result == null) return null;
   if (typeof result !== 'object') return String(result).slice(0, 160);
   const r = result as Record<string, unknown>;
-  // Prefer a few human-meaningful keys when present, else compact JSON.
   const picks: string[] = [];
   for (const k of ['ok', 'gameCount', 'statusCode', 'latencyMs', 'mode', 'exchange', 'symbol', 'fillPrice', 'exitCode', 'observations', 'maxSpreadPct', 'port', 'pageTitle']) {
     if (k in r && r[k] !== null && r[k] !== undefined) picks.push(`${k}=${JSON.stringify(r[k])}`);
@@ -81,13 +97,13 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
 
   for (const j of jobs) {
     const s = statByBot.get(j.botId);
-    if (!s) continue; // bot deleted but job lingered
+    if (!s) continue;
     s.runs += 1;
     s.latestStatus = j.status; // jobs are asc → ends on the most recent run
     if (j.status === 'succeeded') {
       s.succeeded += 1;
       const summary = summarizeResult(j.result);
-      if (summary) s.lastResultSummary = summary; // jobs are asc → ends on latest
+      if (summary) s.lastResultSummary = summary;
     } else if (j.status === 'failed') {
       s.failed += 1;
       if (j.error && s.errorSamples.length < MAX_ERR_SAMPLES && !s.errorSamples.includes(j.error)) {
@@ -102,7 +118,7 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
   const ran = all.filter((s) => s.runs > 0);
   // "failing" = currently broken (most recent run failed), NOT merely failed
   // once in the window — a bot that failed then recovered shouldn't generate a
-  // fix recommendation. This drives the AI lessons-learned section.
+  // fix recommendation.
   const failing = all.filter((s) => s.latestStatus === 'failed').sort((a, b) => b.failed - a.failed);
   const totals = {
     bots: all.length,
@@ -123,28 +139,113 @@ export async function buildDigest(now: Date = new Date()): Promise<Digest> {
   };
 }
 
+// ---- DigestRun persistence -------------------------------------------------
+
+/** Fetch the most recent stored DigestRun (for yesterday's context). */
+export async function getLastDigestRun(): Promise<DigestRunRecord | null> {
+  const row = await prisma.digestRun.findFirst({ orderBy: { windowEnd: 'desc' } });
+  if (!row) return null;
+  return {
+    id: row.id,
+    windowEnd: row.windowEnd,
+    failingBots: row.failingBots as unknown as BotFailSnapshot[],
+    lessonsLearned: row.lessonsLearned,
+    createdAt: row.createdAt,
+  };
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Persist a digest snapshot so tomorrow's run can compare.
+ * Upserts on windowEnd so manual re-runs overwrite the same slot.
+ */
+export async function saveDigestRun(digest: Digest): Promise<void> {
+  const failingBots: BotFailSnapshot[] = digest.failing.map((s) => ({
+    botId: s.botId,
+    botName: s.botName,
+    pool: s.pool,
+    errorSamples: s.errorSamples,
+    lessonText: null,
+  }));
+
+  // Best-effort: extract per-bot lesson text from the markdown response so
+  // tomorrow we can show Claude exactly what was recommended for each bot.
+  if (digest.lessonsLearned) {
+    for (const snap of failingBots) {
+      const pattern = new RegExp(`\\*\\*${escapeRegex(snap.botName)}\\*\\*[^\n]*`, 'i');
+      const m = digest.lessonsLearned.match(pattern);
+      if (m) snap.lessonText = m[0];
+    }
+  }
+
+  await prisma.digestRun.upsert({
+    where: { windowEnd: new Date(digest.windowEnd) },
+    create: {
+      windowEnd: new Date(digest.windowEnd),
+      failingBots: failingBots as unknown as object,
+      lessonsLearned: digest.lessonsLearned,
+    },
+    update: {
+      failingBots: failingBots as unknown as object,
+      lessonsLearned: digest.lessonsLearned,
+    },
+  });
+}
+
+// ---- AI lessons learned ----------------------------------------------------
+
 /**
  * Ask Claude for an advisory "lessons learned" — likely cause + recommended fix
- * per failing bot. Recommend-only: it never edits anything. Returns null when
- * there are no failures or no API key.
+ * per failing bot, with recovery acknowledgements for bots that were failing
+ * yesterday and succeeded today. Returns null when there's nothing to say.
  */
-export async function generateLessonsLearned(digest: Digest): Promise<string | null> {
-  if (digest.failing.length === 0) return null;
+export async function generateLessonsLearned(
+  digest: Digest,
+  previousRun?: DigestRunRecord | null,
+): Promise<string | null> {
   if (!env.ANTHROPIC_API_KEY) return null;
 
-  const lines = digest.failing.map((s) => {
-    const errs = s.errorSamples.length ? s.errorSamples.join(' | ') : '(no error text captured)';
-    return `- ${s.botName} [pool=${s.pool}, template=${s.templateName}] — most recent run failed (${s.failed}/${s.runs} failed today). Errors: ${errs}`;
-  });
+  const nowFailingIds = new Set(digest.failing.map((s) => s.botId));
 
-  const prompt = `These Hive bots are currently broken — their most recent run in the last 24h failed:\n\n${lines.join('\n')}\n\nFor EACH bot, give a one-line likely cause and a concrete recommended fix. Prefer config/operational fixes (missing API key, service offline, geo-blocked exchange, Docker not running, out-of-season data, wrong URL) over code changes. Be specific and brief. Format as a markdown bullet per bot: "**Bot name** — cause. Fix: …". Do not suggest enabling live trading or anything that spends real money.`;
+  // Bots that were failing yesterday but aren't today (recovered).
+  const recovered = previousRun
+    ? previousRun.failingBots.filter((snap) => !nowFailingIds.has(snap.botId))
+    : [];
+
+  if (digest.failing.length === 0 && recovered.length === 0) return null;
+
+  const lines: string[] = [];
+
+  if (digest.failing.length > 0) {
+    lines.push('**Currently failing bots:**');
+    for (const s of digest.failing) {
+      const errs = s.errorSamples.length ? s.errorSamples.join(' | ') : '(no error text captured)';
+      const prev = previousRun?.failingBots.find((p) => p.botId === s.botId);
+      const dayCount = prev ? ' [also failed yesterday' + (prev.lessonText ? ` — previous recommendation: ${prev.lessonText}` : '') + ']' : '';
+      lines.push(`- ${s.botName} [pool=${s.pool}, template=${s.templateName}]${dayCount} — errors: ${errs}`);
+    }
+  }
+
+  if (recovered.length > 0) {
+    lines.push('\n**Recovered since yesterday\'s report:**');
+    for (const snap of recovered) {
+      const prevErrs = snap.errorSamples.slice(0, 2).join(' | ') || '(none)';
+      const prevLesson = snap.lessonText ?? 'none recorded';
+      lines.push(`- ${snap.botName} [pool=${snap.pool}] — was failing (errors: ${prevErrs}), succeeded today. Yesterday's recommendation: ${prevLesson}`);
+    }
+  }
+
+  const prompt = `Here is today's Hive bot fleet status:\n\n${lines.join('\n')}\n\nFor each **currently failing** bot:\n- Give a one-line likely cause and a concrete fix.\n- If it also failed yesterday with the same lesson given, note whether the fix may not have been applied yet or if it's a different issue.\n\nFor each **recovered** bot:\n- Give a one-line confirmation of what likely fixed it, based on the previous errors and recommendation.\n\nFormat as a markdown bullet per bot:\n- Failing: "**Bot name** — cause. Fix: …"\n- Recovered: "**Bot name** ✓ — [what worked / why it recovered]"\n\nPrefer config/operational fixes (missing API key, wrong exchange, Docker not running, out-of-season sport, wrong URL). Do not suggest enabling live trading. Be specific and brief.`;
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
     model: env.HIVE_BOT_BUILDER_MODEL,
-    max_tokens: 1200,
+    max_tokens: 1500,
     system:
-      'You are an SRE assistant reviewing a fleet of automation bots. You give terse, actionable, recommend-only guidance. You never instruct anyone to enable real-money trading.',
+      'You are an SRE assistant reviewing a fleet of automation bots day over day. You give terse, actionable, recommend-only guidance and acknowledge when previous recommendations appear to have worked.',
     messages: [{ role: 'user', content: prompt }],
   });
   return msg.content
@@ -160,9 +261,7 @@ function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
-// Human-readable timestamp in US Eastern (the report's delivery timezone),
-// e.g. "Jun 12, 2026, 7:30 AM EDT". The tz database handles EDT/EST so the
-// label is always correct without us tracking daylight saving.
+// Human-readable timestamp in US Eastern, e.g. "Jun 12, 2026, 7:30 AM EDT".
 function fmtWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-US', {
     timeZone: 'America/New_York',
@@ -208,8 +307,6 @@ export function renderDigestHtml(d: Digest): string {
       : broken ? '<span style="color:#f87171">failing</span>'
       : s.failed === 0 ? `<span style="color:#34d399">${ratePct}% ok</span>`
       : `<span style="color:#fbbf24">recovered (${ratePct}% ok)</span>`;
-    // Show the error only while the bot is currently broken; a recovered bot
-    // shows its latest good result instead of a stale red error.
     const detail = broken && s.errorSamples.length
       ? `<span style="color:#f87171">${esc(s.errorSamples[0])}</span>`
       : s.lastResultSummary ? esc(s.lastResultSummary) : '<span style="color:#9a9a9a">—</span>';
