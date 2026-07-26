@@ -10,6 +10,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable, Optional
 import redis.asyncio as redis_async
+import redis.exceptions as redis_exc
 import structlog
 from .settings import Settings, load_settings
 from .logging import configure_logging
@@ -258,13 +259,21 @@ class HiveWorker(ABC):
             for stream, group in self._subscriptions:
                 if self._should_exit:
                     break
-                res = await self._redis_block.xreadgroup(
-                    group,
-                    consumer_name,
-                    {stream: ">"},
-                    count=self.capacity,
-                    block=2000,
-                )
+                try:
+                    res = await self._redis_block.xreadgroup(
+                        group,
+                        consumer_name,
+                        {stream: ">"},
+                        count=self.capacity,
+                        block=2000,
+                    )
+                except (redis_exc.TimeoutError, redis_exc.ConnectionError, OSError) as e:
+                    # Transient Redis blip (Railway internal NAT killed the idle
+                    # connection, brief network hiccup, etc.). Log and retry —
+                    # the connection pool will reconnect on the next call.
+                    log.warning("worker.redis_blip", err=str(e), stream=stream)
+                    await asyncio.sleep(1.0)
+                    continue
                 if not res:
                     continue
                 got = True
@@ -284,11 +293,21 @@ class HiveWorker(ABC):
         if not self._handlers:
             raise RuntimeError(f"{self.__class__.__name__}.setup() did not register any handlers")
 
-        self._redis_main = redis_async.from_url(self.settings.REDIS_URL, decode_responses=True)
+        self._redis_main = redis_async.from_url(
+            self.settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=10,
+            retry_on_timeout=True,
+        )
         self._redis_block = redis_async.from_url(
             self.settings.REDIS_URL,
             decode_responses=True,
             socket_keepalive=True,
+            socket_connect_timeout=5,
+            # health_check_interval: ping idle connections every 15 s so Railway's
+            # internal NAT can't silently kill them before xreadgroup runs.
+            health_check_interval=15,
         )
         self._subscriptions = worker_eligible_streams(self.pool_type, self.region, self.zone)
         self._stream_to_group = {s: g for s, g in self._subscriptions}
