@@ -30,6 +30,10 @@ model Bot {
   id               String      @id @default(cuid())
   templateId       String
   template         BotTemplate @relation(fields: [templateId], references: [id])
+  // userId = null means a shared/admin bot visible only to admins.
+  // Set to the owning user's id for user-created bots.
+  userId           String?
+  user             User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   name             String
   config           Json
   // Phase 5b: overrides template.affinity when set. Same shape: { region?, zone? }.
@@ -40,8 +44,10 @@ model Bot {
   updatedAt        DateTime    @updatedAt
   jobs             Job[]
   schedules        Schedule[]
+  alerts           Alert[]
 
   @@index([templateId])
+  @@index([userId])
 }
 
 // Job — a single execution of a bot
@@ -182,6 +188,9 @@ model User {
   sessions     Session[]
   resetTokens  ResetToken[]
   auditEntries AuditLog[]
+  bots         Bot[]
+  alerts       Alert[]
+  profile      UserProfile?
 }
 
 model Session {
@@ -261,6 +270,45 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+}
+
+// ============ Alerts ============
+
+// Alert rule — notify a user channel when a bot changes health state.
+// botId = null means "any of this user's bots".
+model Alert {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  botId         String?
+  bot           Bot?      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  channel       String    // email | slack
+  // email channel: { email: string }
+  // slack channel: { webhookUrl: string }
+  config        Json
+  // Which transitions to fire on. Stored as comma-separated string for PG compat.
+  // Values: "failed" | "recovered"
+  triggerOn     String    @default("failed") // "failed" | "failed,recovered"
+  enabled       Boolean   @default(true)
+  // Tracks the last job we checked so we don't double-fire.
+  lastCheckedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([botId])
+}
+
+// ============ User profile / onboarding ============
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Which vertical the user selected during onboarding.
+  // ecommerce | recruiting | agency | trading
+  vertical  String?
+  onboarded Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 // ============ Digest history (learning loop) ============

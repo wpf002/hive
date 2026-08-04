@@ -95,12 +95,18 @@ function LoginForm() {
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <div className="text-center">
+        <div className="flex items-center justify-between">
           <Link
             href="/forgot-password"
             className="font-mono text-[11px] text-hive-subtle underline-offset-2 hover:text-honey-400 hover:underline"
           >
             Forgot password?
+          </Link>
+          <Link
+            href="/signup"
+            className="font-mono text-[11px] text-honey-400 underline-offset-2 hover:underline"
+          >
+            Create account →
           </Link>
         </div>
       </form>

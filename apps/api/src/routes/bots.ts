@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
@@ -15,9 +15,21 @@ function maskBot<T extends BotWithTemplate>(bot: T): T {
   return { ...bot, config: maskBotConfig(bot.template, bot.config) };
 }
 
-// Phase 5b: optional dispatch-time placement. Either field may be omitted —
-// then the bot inherits its template's affinity (or 'any:any' if the template
-// also has none).
+/** Returns true if the request carries admin-equivalent credentials. */
+function isAdmin(req: FastifyRequest): boolean {
+  return req.staticAuth === 'api' || req.user?.role === 'admin';
+}
+
+/**
+ * Prisma `where` clause that limits Bot reads to the requesting user's bots.
+ * Admins (and static-token callers) see everything.
+ */
+function botOwnerFilter(req: FastifyRequest): { userId?: string } {
+  if (isAdmin(req)) return {};
+  return { userId: req.user?.id ?? 'nobody' };
+}
+
+// Phase 5b: optional dispatch-time placement.
 const AffinitySchema = z
   .object({
     region: z.string().min(1).optional(),
@@ -42,7 +54,9 @@ const Patch = z.object({
 });
 
 export async function botRoutes(app: FastifyInstance) {
-  app.post('/api/bots', { preHandler: requireRole('admin') }, async (req, reply) => {
+  // Any authenticated user can create a bot — it's scoped to them.
+  // Admins create shared bots (userId = null).
+  app.post('/api/bots', { preHandler: requireAuth('api') }, async (req, reply) => {
     const body = Create.parse(req.body);
     const template = await prisma.botTemplate.findUnique({ where: { id: body.templateId } });
     if (!template) {
@@ -57,6 +71,8 @@ export async function botRoutes(app: FastifyInstance) {
         name: body.name,
         config: encryptedConfig as Prisma.InputJsonValue,
         enabled: body.enabled ?? true,
+        // Non-admins own their bots; admins create shared bots (userId = null).
+        userId: isAdmin(req) ? null : (req.user?.id ?? null),
         affinityOverride:
           body.affinityOverride === undefined || body.affinityOverride === null
             ? Prisma.JsonNull
@@ -67,8 +83,10 @@ export async function botRoutes(app: FastifyInstance) {
     return reply.code(201).send(maskBot(bot));
   });
 
-  app.get('/api/bots', { preHandler: requireAuth('api') }, async () => {
+  // Users see only their own bots; admins see all.
+  app.get('/api/bots', { preHandler: requireAuth('api') }, async (req) => {
     const rows = await prisma.bot.findMany({
+      where: botOwnerFilter(req),
       orderBy: { createdAt: 'desc' },
       include: { template: true },
     });
@@ -79,8 +97,8 @@ export async function botRoutes(app: FastifyInstance) {
     '/api/bots/:id',
     { preHandler: requireAuth('api') },
     async (req, reply) => {
-      const bot = await prisma.bot.findUnique({
-        where: { id: req.params.id },
+      const bot = await prisma.bot.findFirst({
+        where: { id: req.params.id, ...botOwnerFilter(req) },
         include: {
           template: true,
           jobs: { orderBy: { createdAt: 'desc' }, take: 10 },
@@ -91,12 +109,19 @@ export async function botRoutes(app: FastifyInstance) {
     },
   );
 
+  // Users can edit/delete their own bots; admins can edit/delete anything.
   app.patch<{ Params: { id: string } }>(
     '/api/bots/:id',
-    // Editing a bot defines what runs on workers — admin-only.
-    { preHandler: requireRole('admin') },
+    { preHandler: requireAuth('api') },
     async (req, reply) => {
       const body = Patch.parse(req.body);
+      const existing = await prisma.bot.findFirst({
+        where: { id: req.params.id, ...botOwnerFilter(req) },
+        include: { template: true },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'bot not found' } });
+      }
       const data: Prisma.BotUpdateInput = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
@@ -110,15 +135,6 @@ export async function botRoutes(app: FastifyInstance) {
           : {}),
       };
       if (body.config !== undefined) {
-        const existing = await prisma.bot.findUnique({
-          where: { id: req.params.id },
-          include: { template: true },
-        });
-        if (!existing) {
-          return reply.code(404).send({ error: { code: 'not_found', message: 'bot not found' } });
-        }
-        // Merge new fields over existing config so the UI can submit a partial
-        // patch without losing already-encrypted secrets it never saw.
         const merged = { ...(existing.config as Record<string, unknown>), ...body.config };
         data.config = (await encryptBotConfig(existing.template, merged)) as Prisma.InputJsonValue;
       }
@@ -133,9 +149,14 @@ export async function botRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     '/api/bots/:id',
-    // Deleting a bot mutates the executable fleet — admin-only.
-    { preHandler: requireRole('admin') },
+    { preHandler: requireAuth('api') },
     async (req, reply) => {
+      const existing = await prisma.bot.findFirst({
+        where: { id: req.params.id, ...botOwnerFilter(req) },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'bot not found' } });
+      }
       await prisma.bot.delete({ where: { id: req.params.id } });
       return reply.code(204).send();
     },

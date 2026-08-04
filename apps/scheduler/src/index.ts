@@ -3,6 +3,7 @@ import type { LoggerOptions } from 'pino';
 import cronParser from 'cron-parser';
 import { prisma } from '@hive/db';
 import { createHealthz, type HealthChecks } from '@hive/shared';
+import { createEmailProvider } from '@hive/email';
 import { env } from './env.js';
 
 const TICK_MS = 30_000;
@@ -132,6 +133,85 @@ async function tick(): Promise<void> {
   }
 }
 
+// --- real-time failure alerts -----------------------------------------------
+// Runs every tick (30s). Finds jobs that finished since the last check and
+// fires email / Slack notifications for any matching Alert rules.
+
+let lastAlertCheckAt = new Date();
+
+async function alertTick(): Promise<void> {
+  const checkFrom = lastAlertCheckAt;
+  lastAlertCheckAt = new Date();
+
+  // Find jobs that just finished (succeeded or failed) since the last check.
+  const recentJobs = await prisma.job.findMany({
+    where: {
+      finishedAt: { gt: checkFrom },
+      status: { in: ['failed', 'succeeded'] },
+    },
+    include: { bot: { select: { id: true, name: true, userId: true } } },
+  });
+
+  if (recentJobs.length === 0) return;
+
+  // For each finished job, find enabled alert rules that match.
+  for (const job of recentJobs) {
+    const userId = job.bot.userId;
+    if (!userId) continue; // shared/admin bots don't have user alerts
+
+    const alerts = await prisma.alert.findMany({
+      where: {
+        userId,
+        enabled: true,
+        OR: [{ botId: job.bot.id }, { botId: null }],
+      },
+    });
+
+    for (const alert of alerts) {
+      const triggers = alert.triggerOn.split(',');
+      const fired = triggers.includes(job.status);
+      if (!fired) continue;
+
+      const subject =
+        job.status === 'failed'
+          ? `🔴 Hive alert — ${job.bot.name} failed`
+          : `✅ Hive — ${job.bot.name} recovered`;
+
+      const body = job.status === 'failed'
+        ? `Your bot **${job.bot.name}** just failed.\n\nError: ${job.error ?? '(no error message)'}\n\nJob ID: ${job.id}`
+        : `Your bot **${job.bot.name}** succeeded after a previous failure.\n\nJob ID: ${job.id}`;
+
+      try {
+        if (alert.channel === 'email' && env.RESEND_API_KEY) {
+          const cfg = alert.config as { email?: string };
+          if (cfg.email) {
+            const mailer = createEmailProvider(env as Parameters<typeof createEmailProvider>[0]);
+            await mailer.send({
+              to: cfg.email,
+              subject,
+              text: body,
+              html: `<pre style="font-family:sans-serif;white-space:pre-wrap">${body}</pre>`,
+            });
+          }
+        } else if (alert.channel === 'slack') {
+          const cfg = alert.config as { webhookUrl?: string };
+          if (cfg.webhookUrl) {
+            await fetch(cfg.webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: `${subject}\n\n${body}` }),
+              signal: AbortSignal.timeout(8_000),
+            });
+          }
+        }
+        app.log.info({ alertId: alert.id, jobId: job.id, channel: alert.channel, status: job.status }, 'alert_sent');
+      } catch (e) {
+        app.log.warn({ alertId: alert.id, jobId: job.id, err: (e as Error).message }, 'alert_send_failed');
+      }
+    }
+  }
+}
+
 // --- daily digest -----------------------------------------------------------
 // The scheduler fires bots; it also nudges the API to build+email the daily
 // bot-effectiveness report once a day. All the heavy lifting (aggregation, AI
@@ -190,6 +270,7 @@ try {
   setInterval(() => void tick().catch((err) => app.log.error({ err }, 'tick_loop_failed')), TICK_MS);
   setInterval(() => void loadSchedules().catch((err) => app.log.error({ err }, 'reload_failed')), RELOAD_MS);
   setInterval(() => void digestTick().catch((err) => app.log.error({ err }, 'digest_loop_failed')), TICK_MS);
+  setInterval(() => void alertTick().catch((err) => app.log.error({ err }, 'alert_loop_failed')), TICK_MS);
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');
   process.exit(1);

@@ -11,6 +11,10 @@ const Env = z.object({
   // DAILY_DIGEST_ENABLED=false to turn it off.
   DAILY_DIGEST_CRON: z.string().default('0 12 * * *'),
   DAILY_DIGEST_ENABLED: z.enum(['true', 'false']).default('true'),
+  // Resend key used by the scheduler to send real-time failure alerts.
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().default('Hive <onboarding@resend.dev>'),
+  HIVE_EMAIL_PROVIDER: z.string().default('resend'),
 });
 
 export const env = Env.parse(process.env);

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hive/db": "workspace:*",
+    "@hive/email": "workspace:*",
     "@hive/shared": "workspace:*",
     "cron-parser": "^4.9.0",
     "fastify": "^4.28.0",

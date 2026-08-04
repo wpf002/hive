@@ -1,8 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import cronParser from 'cron-parser';
 import { prisma } from '@hive/db';
-import { requireAuth, requireRole } from '../auth.js';
+import { requireAuth } from '../auth.js';
 
 const Create = z.object({
   botId: z.string().min(1),
@@ -28,14 +28,28 @@ function validateCron(cron: string): string | null {
   }
 }
 
+function isAdmin(req: FastifyRequest): boolean {
+  return req.staticAuth === 'api' || req.user?.role === 'admin';
+}
+
+/** Scopes a bot lookup to the requesting user (admins see all). */
+function botOwnerFilter(req: FastifyRequest): { userId?: string } {
+  if (isAdmin(req)) return {};
+  return { userId: req.user?.id ?? 'nobody' };
+}
+
 export async function scheduleRoutes(app: FastifyInstance) {
-  app.post('/api/schedules', { preHandler: requireRole('admin') }, async (req, reply) => {
+  // Any user can schedule one of their own bots.
+  app.post('/api/schedules', { preHandler: requireAuth('api') }, async (req, reply) => {
     const body = Create.parse(req.body);
     const err = validateCron(body.cron);
     if (err) {
       return reply.code(400).send({ error: { code: 'invalid_cron', message: err } });
     }
-    const bot = await prisma.bot.findUnique({ where: { id: body.botId } });
+    // Verify the bot exists and is owned by this user.
+    const bot = await prisma.bot.findFirst({
+      where: { id: body.botId, ...botOwnerFilter(req) },
+    });
     if (!bot) {
       return reply.code(400).send({ error: { code: 'invalid_bot', message: `botId ${body.botId} not found` } });
     }
@@ -51,8 +65,9 @@ export async function scheduleRoutes(app: FastifyInstance) {
     return reply.code(201).send(created);
   });
 
-  app.get('/api/schedules', { preHandler: requireAuth('api') }, async () => {
+  app.get('/api/schedules', { preHandler: requireAuth('api') }, async (req) => {
     return prisma.schedule.findMany({
+      where: isAdmin(req) ? {} : { bot: { userId: req.user?.id ?? 'nobody' } },
       orderBy: { createdAt: 'desc' },
       include: { bot: { include: { template: true } } },
     });
@@ -62,8 +77,11 @@ export async function scheduleRoutes(app: FastifyInstance) {
     '/api/schedules/:id',
     { preHandler: requireAuth('api') },
     async (req, reply) => {
-      const s = await prisma.schedule.findUnique({
-        where: { id: req.params.id },
+      const s = await prisma.schedule.findFirst({
+        where: {
+          id: req.params.id,
+          ...(isAdmin(req) ? {} : { bot: { userId: req.user?.id ?? 'nobody' } }),
+        },
         include: { bot: { include: { template: true } } },
       });
       if (!s) return reply.code(404).send({ error: { code: 'not_found', message: 'schedule not found' } });
@@ -73,11 +91,15 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    // Schedules auto-dispatch bots — creating/editing them is admin-only.
-    { preHandler: requireRole('admin') },
+    { preHandler: requireAuth('api') },
     async (req, reply) => {
       const body = Patch.parse(req.body);
-      const existing = await prisma.schedule.findUnique({ where: { id: req.params.id } });
+      const existing = await prisma.schedule.findFirst({
+        where: {
+          id: req.params.id,
+          ...(isAdmin(req) ? {} : { bot: { userId: req.user?.id ?? 'nobody' } }),
+        },
+      });
       if (!existing) return reply.code(404).send({ error: { code: 'not_found', message: 'schedule not found' } });
 
       const nextCron = body.cron ?? existing.cron;
@@ -100,9 +122,17 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    // Removing a schedule mutates the execution fleet — admin-only.
-    { preHandler: requireRole('admin') },
+    { preHandler: requireAuth('api') },
     async (req, reply) => {
+      const existing = await prisma.schedule.findFirst({
+        where: {
+          id: req.params.id,
+          ...(isAdmin(req) ? {} : { bot: { userId: req.user?.id ?? 'nobody' } }),
+        },
+      });
+      if (!existing) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'schedule not found' } });
+      }
       await prisma.schedule.delete({ where: { id: req.params.id } });
       return reply.code(204).send();
     },
