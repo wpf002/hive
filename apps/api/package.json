@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
-    "start:fly": "tsx src/index.ts",
+    "start:fly": "pnpm --filter @hive/db migrate:deploy && tsx src/index.ts",
     "build": "tsc",
-    "start": "prisma migrate deploy --schema=../../packages/db/prisma/schema.prisma && node --env-file-if-exists=../../.env dist/index.js",
+    "start": "node --env-file-if-exists=../../.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\"",
     "test:integration": "node --env-file-if-exists=../../.env --import tsx --test --test-force-exit \"src/**/*.itest.ts\"",
