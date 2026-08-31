@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
+import { isAdmin, botOwnerFilter, visibleJobIds } from '../lib/ownership.js';
 import { writeAuditLog } from '../lib/audit.js';
 
 const SeedBody = z.object({
@@ -57,20 +58,43 @@ export async function tradingRoutes(app: FastifyInstance) {
     return reply.code(action === 'created' ? 201 : 200).send({ ...result, seeded: body.amount, action });
   });
 
-  app.get('/api/paper-wallet', { preHandler: requireAuth('api') }, async () => {
+  // Wallets are shared desk state, so admins see all of them. A non-admin sees
+  // only wallets bound to one of their own bots — an unbound wallet
+  // (botId null) is desk-level and not theirs to read.
+  app.get('/api/paper-wallet', { preHandler: requireAuth('api') }, async (req) => {
+    if (isAdmin(req)) {
+      return prisma.paperWallet.findMany({
+        orderBy: [{ exchange: 'asc' }, { currency: 'asc' }],
+      });
+    }
+    const bots = await prisma.bot.findMany({ where: botOwnerFilter(req), select: { id: true } });
     return prisma.paperWallet.findMany({
+      where: { botId: { in: bots.map((b) => b.id) } },
       orderBy: [{ exchange: 'asc' }, { currency: 'asc' }],
     });
   });
 
+  // TradeAudit carries mode:'live' rows, so an unscoped read exposed real
+  // order flow across tenants.
   app.get('/api/trade-audit', { preHandler: requireAuth('api') }, async (req) => {
     const q = AuditQuery.parse(req.query);
+    const scope: Prisma.TradeAuditWhereInput = {};
+    if (!isAdmin(req)) {
+      const bots = await prisma.bot.findMany({ where: botOwnerFilter(req), select: { id: true } });
+      scope.botId = { in: bots.map((b) => b.id) };
+    }
+    // AND the scope rather than spreading it alongside the filters: `scope`
+    // sets `botId`, and so does `q.botId`, so at the same object level the
+    // caller's query param would simply overwrite the ownership restriction
+    // instead of narrowing it — handing any user another tenant's live order
+    // flow by passing ?botId=. Same key, last write wins.
+    const filters: Prisma.TradeAuditWhereInput = {
+      ...(q.jobId ? { jobId: q.jobId } : {}),
+      ...(q.botId ? { botId: q.botId } : {}),
+      ...(q.mode ? { mode: q.mode } : {}),
+    };
     return prisma.tradeAudit.findMany({
-      where: {
-        jobId: q.jobId,
-        botId: q.botId,
-        mode: q.mode,
-      },
+      where: isAdmin(req) ? filters : { AND: [scope, filters] },
       orderBy: { createdAt: 'desc' },
       take: q.limit,
     });
@@ -84,6 +108,14 @@ export async function tradingRoutes(app: FastifyInstance) {
       // botId on paper trade is via the originating job's bot
       const jobs = await prisma.job.findMany({ where: { botId: q.botId }, select: { id: true } });
       where.jobId = { in: jobs.map((j) => j.id) };
+    }
+    // PaperTrade has no owner column — it reaches a user only through its job.
+    const allowed = await visibleJobIds(req);
+    if (allowed) {
+      where.jobId =
+        where.jobId && typeof where.jobId === 'object' && 'in' in where.jobId
+          ? { in: (where.jobId.in as string[]).filter((id) => allowed.includes(id)) }
+          : { in: allowed };
     }
     return prisma.paperTrade.findMany({
       where,

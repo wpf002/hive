@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@hive/db';
 import { verifyLocalPresign } from '@hive/storage';
 import { requireAuth } from '../auth.js';
+import { findJobForCaller, jobOwnerFilter } from '../lib/ownership.js';
 import {
   openArtifactStream,
   presignArtifactGet,
@@ -19,6 +20,24 @@ const UploadQuery = z.object({
 const PresignQuery = z.object({
   ttl: z.coerce.number().int().positive().max(3600).default(300),
 });
+
+/**
+ * Loads an artifact only if the caller owns the job that produced it.
+ * Artifact has no userId of its own — ownership is inherited through
+ * Job -> Bot -> userId, so the check is a join rather than a column read.
+ */
+async function findArtifactForCaller(
+  req: Parameters<typeof jobOwnerFilter>[0],
+  artifactId: string,
+) {
+  const art = await prisma.artifact.findUnique({ where: { id: artifactId } });
+  if (!art) return null;
+  const job = await prisma.job.findFirst({
+    where: { id: art.jobId, ...jobOwnerFilter(req) },
+    select: { id: true },
+  });
+  return job ? art : null;
+}
 
 export async function artifactRoutes(app: FastifyInstance) {
   // ===== Upload (worker scope only) =====
@@ -62,7 +81,10 @@ export async function artifactRoutes(app: FastifyInstance) {
     '/api/jobs/:id/artifacts',
     { preHandler: requireAuth('api') },
     async (req, reply) => {
-      const job = await prisma.job.findUnique({ where: { id: req.params.id } });
+      // Scoped through the owning bot: artifacts are screenshots, scraped
+      // pages and CI logs, so an unscoped listing hands every tenant's output
+      // to any logged-in caller.
+      const job = await findJobForCaller(req, req.params.id);
       if (!job) return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
       const rows = await prisma.artifact.findMany({
         where: { jobId: job.id },
@@ -85,7 +107,7 @@ export async function artifactRoutes(app: FastifyInstance) {
     '/api/artifacts/:id',
     { preHandler: requireAuth('api') },
     async (req, reply) => {
-      const art = await prisma.artifact.findUnique({ where: { id: req.params.id } });
+      const art = await findArtifactForCaller(req, req.params.id);
       if (!art) return reply.code(404).send({ error: { code: 'not_found', message: 'artifact not found' } });
       reply.header('Content-Type', art.contentType || 'application/octet-stream');
       reply.header('Content-Length', String(art.sizeBytes));
@@ -103,7 +125,9 @@ export async function artifactRoutes(app: FastifyInstance) {
     { preHandler: requireAuth('api') },
     async (req, reply) => {
       const q = PresignQuery.parse(req.query);
-      const art = await prisma.artifact.findUnique({ where: { id: req.params.id } });
+      // The presigned token that follows is a bearer capability with no further
+      // auth, so the ownership check has to happen here, before it is minted.
+      const art = await findArtifactForCaller(req, req.params.id);
       if (!art) return reply.code(404).send({ error: { code: 'not_found', message: 'artifact not found' } });
       const signed = await presignArtifactGet(art.storageKey, q.ttl);
       return { url: signed.url, expiresAt: signed.expiresAt.toISOString() };

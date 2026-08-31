@@ -196,12 +196,25 @@ async function alertTick(): Promise<void> {
         } else if (alert.channel === 'slack') {
           const cfg = alert.config as { webhookUrl?: string };
           if (cfg.webhookUrl) {
-            await fetch(cfg.webhookUrl, {
+            // redirect: 'manual' is load-bearing. The URL is SSRF-checked when
+            // it's saved, but fetch follows redirects by default, so a webhook
+            // on a public host could 302 to an internal address and land the
+            // request inside the control plane anyway — this process holds
+            // API_AUTH_TOKEN, RESEND_API_KEY and DATABASE_URL. The monitor
+            // worker's guard defaults redirects off for the same reason.
+            const res = await fetch(cfg.webhookUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: `${subject}\n\n${body}` }),
+              redirect: 'manual',
               signal: AbortSignal.timeout(8_000),
             });
+            if (res.status >= 300 && res.status < 400) {
+              app.log.warn(
+                { alertId: alert.id, status: res.status },
+                'alert_webhook_redirect_refused',
+              );
+            }
           }
         }
         app.log.info({ alertId: alert.id, jobId: job.id, channel: alert.channel, status: job.status }, 'alert_sent');

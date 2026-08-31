@@ -4,7 +4,11 @@ import { prisma, Prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
 import { redis, STREAMS } from '../redis.js';
 import { writeAuditLog } from '../lib/audit.js';
-import { decryptBotConfig } from '../lib/secrets.js';
+import { decryptBotConfig, maskBotConfig } from '../lib/secrets.js';
+import { jobOwnerFilter } from '../lib/ownership.js';
+
+/** Matches OFFLINE_AFTER_MS in routes/workers.ts and the dispatcher. */
+const WORKER_ONLINE_WINDOW_MS = 30_000;
 
 const RunBody = z.object({
   overrideConfig: z.record(z.unknown()).optional(),
@@ -16,6 +20,25 @@ const ListQuery = z.object({
   botId: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
+
+/**
+ * Masks any secret still sitting in a job's persisted payload.
+ *
+ * New jobs are written masked (see /run and /requeue below), but rows created
+ * before that fix can hold cleartext override secrets, and this endpoint is the
+ * thing that served them. Masking on read as well means the fix covers history
+ * without a migration.
+ */
+function maskJob<T extends { payload: unknown; bot?: { template: { configSchema: unknown } } }>(
+  job: T,
+): T {
+  const template = job.bot?.template;
+  const payload = job.payload;
+  if (!template || !payload || typeof payload !== 'object' || Array.isArray(payload)) return job;
+  const p = payload as Record<string, unknown>;
+  if (!p.config || typeof p.config !== 'object') return job;
+  return { ...job, payload: { ...p, config: maskBotConfig(template, p.config) } };
+}
 
 export async function jobRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
@@ -36,11 +59,16 @@ export async function jobRoutes(app: FastifyInstance) {
       // A worker advertises `metadata.singleton: true` in its heartbeat; if
       // any such worker for this pool already has an active job, we 429 with
       // a retry hint instead of queueing forever behind it.
+      // Liveness comes from lastSeenAt, not the status column: nothing writes
+      // 'offline' promptly (the sweeper deletes stale rows on a long timer),
+      // so a worker that died mid-job would otherwise look busy forever and
+      // 429 every subsequent run on a singleton pool.
       const busyWorker = await prisma.worker.findFirst({
         where: {
           poolType: bot.template.poolType,
           activeJobs: { gt: 0 },
           status: { not: 'offline' },
+          lastSeenAt: { gt: new Date(Date.now() - WORKER_ONLINE_WINDOW_MS) },
         },
       });
       if (
@@ -66,7 +94,15 @@ export async function jobRoutes(app: FastifyInstance) {
       const config = { ...decrypted, ...(body.overrideConfig ?? {}) };
       // Persisted payload preserves whatever the bot has stored; the cleartext
       // copy lives only on the dispatch stream + in worker memory.
-      const storedPayload = { ...(bot.config as Record<string, unknown>), ...(body.overrideConfig ?? {}) };
+      //
+      // bot.config is already encrypted at rest, but overrideConfig arrives as
+      // cleartext (see above), so merging it in unmasked would write a live
+      // secret into Job.payload — which is served over HTTP. Mask the merged
+      // result so a secret can never be read back out of a job record.
+      const storedPayload = maskBotConfig(bot.template, {
+        ...(bot.config as Record<string, unknown>),
+        ...(body.overrideConfig ?? {}),
+      });
       const job = await prisma.job.create({
         data: {
           botId: bot.id,
@@ -100,27 +136,30 @@ export async function jobRoutes(app: FastifyInstance) {
 
   app.get('/api/jobs', { preHandler: requireAuth('api') }, async (req) => {
     const q = ListQuery.parse(req.query);
-    return prisma.job.findMany({
-      where: { status: q.status, botId: q.botId },
+    const rows = await prisma.job.findMany({
+      where: { status: q.status, botId: q.botId, ...jobOwnerFilter(req) },
       orderBy: { createdAt: 'desc' },
       take: q.limit,
       include: { bot: { include: { template: true } } },
     });
+    return rows.map(maskJob);
   });
 
   app.get<{ Params: { id: string } }>(
     '/api/jobs/:id',
     { preHandler: requireAuth('api') },
     async (req, reply) => {
-      const job = await prisma.job.findUnique({
-        where: { id: req.params.id },
+      const job = await prisma.job.findFirst({
+        where: { id: req.params.id, ...jobOwnerFilter(req) },
         include: {
           bot: { include: { template: true } },
           logs: { orderBy: { timestamp: 'asc' }, take: 1000 },
         },
       });
+      // 404 rather than 403 for someone else's job: a 403 would confirm the id
+      // exists and turn this into an existence oracle.
       if (!job) return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
-      return job;
+      return maskJob(job);
     },
   );
 
@@ -145,7 +184,10 @@ export async function jobRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get('/api/jobs/dlq', { preHandler: requireAuth('api') }, async () => {
+  // The DLQ is a Redis stream with no owner column — it mixes every tenant's
+  // failures and their error strings, and can't be filtered per caller. It's an
+  // operations view, so it's admin-only rather than partially scoped.
+  app.get('/api/jobs/dlq', { preHandler: requireRole('admin') }, async () => {
     const entries = (await redis.xrange('hive:dlq', '-', '+', 'COUNT', 200)) as Array<[string, string[]]>;
     const items = entries.map(([id, fields]) => {
       const map: Record<string, string> = {};
@@ -186,7 +228,7 @@ export async function jobRoutes(app: FastifyInstance) {
       // Requeue uses the bot's CURRENT config, not the job's original payload,
       // so a fix to the bot config takes effect on requeue.
       const decrypted = await decryptBotConfig(job.bot.template, job.bot.config);
-      const storedConfig = job.bot.config as Record<string, unknown>;
+      const storedConfig = maskBotConfig(job.bot.template, job.bot.config);
       const updated = await prisma.job.update({
         where: { id: job.id },
         data: {

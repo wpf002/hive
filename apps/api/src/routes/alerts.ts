@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '@hive/db';
 import { requireAuth } from '../auth.js';
+import { assertPublicUrl, SsrfError } from '../lib/ssrf.js';
 
 const ConfigEmail = z.object({ email: z.string().email() });
 const ConfigSlack = z.object({ webhookUrl: z.string().url() });
@@ -39,6 +40,20 @@ export async function alertRoutes(app: FastifyInstance) {
 
     const body = Create.parse(req.body);
 
+    // The scheduler is what POSTs to this webhook, and it holds API_AUTH_TOKEN,
+    // RESEND_API_KEY and DATABASE_URL inside the control-plane network. An
+    // unvalidated URL here is request forgery from that vantage point.
+    if (body.channel === 'slack' && 'webhookUrl' in body.config) {
+      try {
+        await assertPublicUrl(body.config.webhookUrl);
+      } catch (e) {
+        if (e instanceof SsrfError) {
+          return reply.code(400).send({ error: { code: 'blocked_url', message: e.message } });
+        }
+        throw e;
+      }
+    }
+
     // Verify botId belongs to this user if specified.
     if (body.botId) {
       const isAdmin = req.staticAuth === 'api' || req.user?.role === 'admin';
@@ -74,6 +89,19 @@ export async function alertRoutes(app: FastifyInstance) {
       const body = Patch.parse(req.body);
       const existing = await prisma.alert.findFirst({ where: { id: req.params.id, userId } });
       if (!existing) return reply.code(404).send({ error: { code: 'not_found' } });
+
+      // Same guard as create — otherwise a clean webhook could be created and
+      // then edited to point inside the network.
+      if (body.config && 'webhookUrl' in body.config) {
+        try {
+          await assertPublicUrl(body.config.webhookUrl);
+        } catch (e) {
+          if (e instanceof SsrfError) {
+            return reply.code(400).send({ error: { code: 'blocked_url', message: e.message } });
+          }
+          throw e;
+        }
+      }
 
       return prisma.alert.update({
         where: { id: req.params.id },

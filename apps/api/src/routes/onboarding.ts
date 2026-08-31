@@ -11,6 +11,7 @@ import cronParser from 'cron-parser';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth } from '../auth.js';
 import { encryptBotConfig } from '../lib/secrets.js';
+import { assertPublicUrl, SsrfError } from '../lib/ssrf.js';
 
 const VERTICALS = ['ecommerce', 'recruiting', 'agency', 'trading'] as const;
 type Vertical = (typeof VERTICALS)[number];
@@ -140,6 +141,19 @@ export async function onboardingRoutes(app: FastifyInstance) {
     const isAdmin = req.staticAuth === 'api' || req.user?.role === 'admin';
 
     const body = Body.parse(req.body);
+
+    // Same SSRF guard as POST /api/alerts — this field becomes an Alert row
+    // below, so leaving it unchecked here would just be the other door.
+    if (body.slackWebhookUrl) {
+      try {
+        await assertPublicUrl(body.slackWebhookUrl);
+      } catch (e) {
+        if (e instanceof SsrfError) {
+          return reply.code(400).send({ error: { code: 'blocked_url', message: e.message } });
+        }
+        throw e;
+      }
+    }
 
     // Idempotent: if already onboarded, return current profile without recreating bots.
     const existing = await prisma.userProfile.findUnique({ where: { userId } });

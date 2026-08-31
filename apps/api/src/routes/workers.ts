@@ -66,16 +66,16 @@ export async function workerRoutes(app: FastifyInstance) {
     return worker;
   });
 
+  // Read-only. This used to reap stale workers with an updateMany, which made a
+  // GET mutate state — anyone polling the page drove writes, and a caller with
+  // read access could flip rows. Liveness is now derived at read time from
+  // lastSeenAt, so the response says the same thing without the write.
   app.get('/api/workers', { preHandler: requireAuth('api') }, async () => {
-    const cutoff = new Date(Date.now() - OFFLINE_AFTER_MS);
-    await prisma.worker.updateMany({
-      where: { status: { not: 'offline' }, lastSeenAt: { lt: cutoff } },
-      data: { status: 'offline' },
-    });
+    const cutoff = Date.now() - OFFLINE_AFTER_MS;
     // Phase 5b: order by region/zone first so the UI can render grouped lists
     // without a second sort pass. Single-host deployments all collapse into
     // (region=local, zone=default) and look identical to pre-5b.
-    return prisma.worker.findMany({
+    const rows = await prisma.worker.findMany({
       orderBy: [
         { region: 'asc' },
         { zone: 'asc' },
@@ -83,6 +83,11 @@ export async function workerRoutes(app: FastifyInstance) {
         { hostname: 'asc' },
       ],
     });
+    return rows.map((w) =>
+      w.status !== 'offline' && w.lastSeenAt.getTime() < cutoff
+        ? { ...w, status: 'offline' }
+        : w,
+    );
   });
 
   app.post<{ Params: { id: string } }>(

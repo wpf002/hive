@@ -20,6 +20,52 @@ All notable changes to Hive are documented here.
 - `POST /api/onboarding` wrote Schedule rows directly, bypassing the route
   guard. Starter packs created by non-admins are now dormant until an admin
   enables them, and the response says so.
+- **Closed five cross-tenant authorization gaps.** Hive is multi-tenant — a Bot
+  carries a `userId` and Jobs, Artifacts, logs and trades inherit ownership
+  through it — but several read routes never applied that filter and returned
+  every tenant's data to any logged-in caller:
+  - `GET /api/jobs` and `/api/jobs/:id` are now scoped to the caller's bots, and
+    404 rather than 403 on someone else's job so they aren't an existence oracle.
+    The DLQ (`/api/jobs/dlq`) is a cross-tenant ops view with no owner column, so
+    it is admin-only; the UI's Quarantine tab is gated to match.
+  - Job payloads no longer persist cleartext secrets. `POST /api/bots/:id/run`
+    merged a cleartext `overrideConfig` into `Job.payload`, which was then served
+    over HTTP; the payload is now masked on write and on read, so existing rows
+    are covered without a migration.
+  - Artifact listing, download and presigning check the owning job. The presign
+    check matters most: the token it mints is a bearer capability carrying no
+    further authorization.
+  - `GET /api/jobs/:id/stream` scopes the SSE log firehose to the job's owner,
+    matching what the mission stream already did.
+  - `GET /api/paper-wallet`, `/api/trade-audit` and `/api/paper-trades` are
+    ownership-scoped. `TradeAudit` includes `mode: 'live'` rows, so this was real
+    order flow readable across tenants. The scope is ANDed with the query
+    filters rather than spread beside them — both set `botId`, so at one object
+    level `?botId=` would have overwritten the restriction instead of narrowing
+    it. Note for operators: paper wallets are created with `botId` null by every
+    funding path, so non-admins now see an empty wallet list.
+- **SSRF guard on alert webhooks.** `POST /api/alerts`, `PATCH /api/alerts/:id`
+  and the `slackWebhookUrl` field of `POST /api/onboarding` now refuse URLs
+  resolving to private, loopback or link-local addresses (including the cloud
+  metadata endpoint). The scheduler makes these requests and holds
+  `API_AUTH_TOKEN`, `RESEND_API_KEY` and `DATABASE_URL`, so the forged request
+  originated inside the control-plane network. Mirrors the guard the monitor
+  worker already used; opt out with `HIVE_ALLOW_INTERNAL_WEBHOOKS=true`.
+  The guard parses IPv6 rather than string-matching it — `new URL()`
+  re-serializes `[::ffff:169.254.169.254]` as `[::ffff:a9fe:a9fe]`, so a check
+  looking for a trailing dotted quad waved the metadata endpoint straight
+  through. IPv4-mapped, NAT64 and 6to4 embedded addresses are all resolved to
+  the IPv4 they carry. The scheduler also stops following redirects on webhook
+  delivery, since a public host could otherwise 302 into the control plane
+  after the URL passed validation.
+
+### Fixed
+- `GET /api/workers` no longer writes. It reaped stale workers with an
+  `updateMany`, so a read verb mutated state and any caller with read access
+  drove writes. Liveness is now derived from `lastSeenAt` at read time, and the
+  singleton-pool busy check in `/run` reads `lastSeenAt` too — previously a
+  worker that died mid-job kept its pool 429ing for up to `WORKER_REAP_AFTER_S`
+  (default one hour).
 
 ### Added
 - Swarm layer: missions, blackboard, coordinator and the proposal approval gate.

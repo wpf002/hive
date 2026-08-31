@@ -19,6 +19,11 @@ import { authRoutes } from './auth.js';
 import { botRoutes } from './bots.js';
 import { jobRoutes } from './jobs.js';
 import { scheduleRoutes } from './schedules.js';
+import { artifactRoutes } from './artifacts.js';
+import { tradingRoutes } from './trading.js';
+import { alertRoutes } from './alerts.js';
+import { workerRoutes } from './workers.js';
+import { initStorage } from '../lib/artifacts.js';
 import { hashPassword } from '../lib/passwords.js';
 
 let dbUp = false;
@@ -38,9 +43,14 @@ const PW = 'integration-test-pw-123';
 let templateId = '';
 let createdBotId = '';
 let viewerBotId = '';
+let adminJobId = '';
+let secretBotId = '';
+let secretField = '';
 
 before(async () => {
   if (!dbUp) return;
+  // The presign route needs a storage provider; index.ts does this at boot.
+  await initStorage();
   app = Fastify();
   await app.register(cookie);
   registerErrorHandler(app);
@@ -48,12 +58,51 @@ before(async () => {
   await app.register(botRoutes);
   await app.register(jobRoutes);
   await app.register(scheduleRoutes);
+  await app.register(artifactRoutes);
+  await app.register(tradingRoutes);
+  await app.register(alertRoutes);
+  await app.register(workerRoutes);
   await app.ready();
 
   await prisma.user.create({ data: { email: adminEmail, displayName: 'IT Admin', passwordHash: await hashPassword(PW), role: 'admin' } });
   await prisma.user.create({ data: { email: viewerEmail, displayName: 'IT Viewer', passwordHash: await hashPassword(PW), role: 'user' } });
   const t = await prisma.botTemplate.findFirst();
   templateId = t?.id ?? '';
+
+  // An admin-owned bot with a job, so the cross-tenant tests below have
+  // something a viewer must not be able to reach.
+  if (templateId) {
+    const adminBot = await prisma.bot.create({
+      data: { templateId, userId: null, name: `itest-bot-${suffix}-adminowned`, config: {} },
+    });
+    const job = await prisma.job.create({
+      data: { botId: adminBot.id, status: 'running', payload: {} },
+    });
+    adminJobId = job.id;
+  }
+
+  // A template carrying an x-secret field, to prove an override secret never
+  // lands in Job.payload in cleartext.
+  const withSecret = (await prisma.botTemplate.findMany()).find((t) => {
+    const props = (t.configSchema as { properties?: Record<string, { 'x-secret'?: boolean }> })
+      .properties;
+    return props && Object.values(props).some((v) => v?.['x-secret'] === true);
+  });
+  if (withSecret) {
+    const props = (withSecret.configSchema as {
+      properties: Record<string, { 'x-secret'?: boolean }>;
+    }).properties;
+    secretField = Object.keys(props).find((k) => props[k]?.['x-secret'] === true) ?? '';
+    const b = await prisma.bot.create({
+      data: {
+        templateId: withSecret.id,
+        userId: null,
+        name: `itest-bot-${suffix}-secret`,
+        config: {},
+      },
+    });
+    secretBotId = b.id;
+  }
 
   // Login is Redis-rate-limited by source IP, and the counter outlives the
   // process. Without this, a second run of the suite in the same window starts
@@ -66,6 +115,7 @@ after(async () => {
   if (!dbUp) return;
   if (createdBotId) await prisma.bot.deleteMany({ where: { id: createdBotId } });
   if (viewerBotId) await prisma.bot.deleteMany({ where: { id: viewerBotId } });
+  if (adminJobId) await prisma.job.deleteMany({ where: { id: adminJobId } });
   await prisma.bot.deleteMany({ where: { name: { startsWith: `itest-bot-${suffix}` } } });
   await prisma.user.deleteMany({ where: { email: { in: [adminEmail, viewerEmail] } } });
   await app.close();
@@ -198,6 +248,179 @@ maybe('editing a bot config revokes its schedules', async () => {
     'an admin approved the config that existed when they scheduled it, not whatever replaces it',
   );
   assert.equal(after?.nextRunAt, null);
+});
+
+// --- cross-tenant isolation -------------------------------------------------
+//
+// Everything below descends from a Bot's userId. These routes each forgot that,
+// and returned every tenant's data to any logged-in caller.
+
+maybe('viewer cannot see another user\'s job in the list', async () => {
+  if (!adminJobId) return;
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({ method: 'GET', url: '/api/jobs', headers: { cookie } });
+  assert.equal(res.statusCode, 200);
+  const ids = (JSON.parse(res.body) as { id: string }[]).map((j) => j.id);
+  assert.ok(!ids.includes(adminJobId), 'admin-owned job leaked into a viewer\'s job list');
+});
+
+maybe('viewer gets 404, not 403, fetching another user\'s job', async () => {
+  if (!adminJobId) return;
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({ method: 'GET', url: `/api/jobs/${adminJobId}`, headers: { cookie } });
+  // 404 rather than 403 so the endpoint isn't an existence oracle for job ids.
+  assert.equal(res.statusCode, 404);
+});
+
+maybe('a run never persists a cleartext override secret into Job.payload', async () => {
+  if (!secretBotId || !secretField) return;
+  const cookie = await login(adminEmail);
+  const run = await app.inject({
+    method: 'POST', url: `/api/bots/${secretBotId}/run`, headers: { cookie },
+    payload: { overrideConfig: { [secretField]: 'sk-live-SUPERSECRET-0001' } },
+  });
+  // A pool may reject the run for unrelated reasons; only assert on success.
+  if (run.statusCode !== 201) return;
+  const jobId = JSON.parse(run.body).id;
+  const row = await prisma.job.findUnique({ where: { id: jobId } });
+  const raw = JSON.stringify(row?.payload ?? {});
+  assert.ok(
+    !raw.includes('SUPERSECRET'),
+    'an override secret was written to Job.payload in cleartext',
+  );
+
+  const viaHttp = await app.inject({ method: 'GET', url: `/api/jobs/${jobId}`, headers: { cookie } });
+  assert.ok(!viaHttp.body.includes('SUPERSECRET'), 'job endpoint served a cleartext secret');
+});
+
+maybe('viewer cannot stream another user\'s job logs', async () => {
+  if (!adminJobId) return;
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({
+    method: 'GET', url: `/api/jobs/${adminJobId}/stream`, headers: { cookie },
+  });
+  assert.equal(res.statusCode, 404, 'the SSE log stream must be scoped like every other job read');
+});
+
+maybe('viewer cannot list another user\'s artifacts', async () => {
+  if (!adminJobId) return;
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({
+    method: 'GET', url: `/api/jobs/${adminJobId}/artifacts`, headers: { cookie },
+  });
+  assert.equal(res.statusCode, 404);
+});
+
+maybe('viewer cannot download or presign another user\'s artifact', async () => {
+  if (!adminJobId) return;
+  const art = await prisma.artifact.create({
+    data: {
+      jobId: adminJobId,
+      filename: 'secret.png',
+      contentType: 'image/png',
+      sizeBytes: 1,
+      storageKey: `${adminJobId}/secret.png`,
+    },
+  });
+  const cookie = await login(viewerEmail);
+  const dl = await app.inject({ method: 'GET', url: `/api/artifacts/${art.id}`, headers: { cookie } });
+  assert.equal(dl.statusCode, 404);
+  // The presign route must refuse too — the token it mints is a bearer
+  // capability that carries no further authorization.
+  const ps = await app.inject({
+    method: 'GET', url: `/api/artifacts/${art.id}/presigned`, headers: { cookie },
+  });
+  assert.equal(ps.statusCode, 404);
+
+  const adminCookie = await login(adminEmail);
+  const own = await app.inject({
+    method: 'GET', url: `/api/artifacts/${art.id}/presigned`, headers: { cookie: adminCookie },
+  });
+  assert.equal(own.statusCode, 200, 'the owner must still be able to presign');
+  await prisma.artifact.delete({ where: { id: art.id } });
+});
+
+maybe('viewer cannot read another user\'s live trade audit', async () => {
+  if (!adminJobId) return;
+  const adminBot = await prisma.job.findUnique({ where: { id: adminJobId }, select: { botId: true } });
+  const row = await prisma.tradeAudit.create({
+    data: {
+      jobId: adminJobId,
+      botId: adminBot!.botId,
+      mode: 'live',
+      action: 'placeOrder',
+      payload: {},
+      result: {},
+    },
+  });
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({ method: 'GET', url: '/api/trade-audit', headers: { cookie } });
+  assert.equal(res.statusCode, 200);
+  const ids = (JSON.parse(res.body) as { id: string }[]).map((r) => r.id);
+  assert.ok(!ids.includes(row.id), 'live order flow leaked across tenants');
+
+  // Naming the victim's bot explicitly must NARROW the scope, not replace it.
+  // Spreading the ownership filter alongside the query params put both on the
+  // same `botId` key, so ?botId= silently deleted the restriction.
+  const targeted = await app.inject({
+    method: 'GET',
+    url: `/api/trade-audit?botId=${adminBot!.botId}&mode=live`,
+    headers: { cookie },
+  });
+  assert.equal(targeted.statusCode, 200);
+  assert.deepEqual(
+    JSON.parse(targeted.body),
+    [],
+    'a query param must not be able to widen the ownership scope back out',
+  );
+
+  // The owner still sees it, so the scope narrows rather than blanket-denies.
+  const adminCookie = await login(adminEmail);
+  const asAdmin = await app.inject({
+    method: 'GET',
+    url: `/api/trade-audit?botId=${adminBot!.botId}&mode=live`,
+    headers: { cookie: adminCookie },
+  });
+  assert.ok(
+    (JSON.parse(asAdmin.body) as { id: string }[]).some((r) => r.id === row.id),
+    'the owner must still be able to filter to their own bot',
+  );
+
+  await prisma.tradeAudit.delete({ where: { id: row.id } });
+});
+
+maybe('an alert webhook pointing at the cloud metadata endpoint is refused', async () => {
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({
+    method: 'POST', url: '/api/alerts', headers: { cookie },
+    payload: {
+      channel: 'slack',
+      config: { webhookUrl: 'http://169.254.169.254/latest/meta-data/' },
+    },
+  });
+  assert.equal(res.statusCode, 400, 'the scheduler would have made this request from inside the network');
+  assert.match(JSON.parse(res.body).error.code, /blocked_url/);
+});
+
+maybe('GET /api/workers does not mutate worker rows', async () => {
+  const w = await prisma.worker.create({
+    data: {
+      poolType: 'task_runner',
+      hostname: `itest-${suffix}`,
+      status: 'online',
+      lastSeenAt: new Date(Date.now() - 10 * 60_000), // long stale
+    },
+  });
+  const cookie = await login(viewerEmail);
+  const res = await app.inject({ method: 'GET', url: '/api/workers', headers: { cookie } });
+  assert.equal(res.statusCode, 200);
+  // The response reports it offline...
+  const shown = (JSON.parse(res.body) as { id: string; status: string }[]).find((x) => x.id === w.id);
+  assert.equal(shown?.status, 'offline');
+  // ...but a GET must not have written that back.
+  const after = await prisma.worker.findUnique({ where: { id: w.id } });
+  assert.equal(after?.status, 'online', 'a read verb wrote to the database');
+  await prisma.worker.delete({ where: { id: w.id } });
 });
 
 maybe('unauthenticated request is rejected — 401', async () => {

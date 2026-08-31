@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { PoolBadge } from '@/components/PoolBadge';
 import { fmtDuration, fmtRelative, fmtJobShort } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useMe } from '@/lib/useMe';
 import type { Job, JobStatus, DlqEntry, Pool } from '@/lib/types';
 
 const STATUSES: (JobStatus | 'all')[] = ['all', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'unroutable'];
@@ -22,6 +23,7 @@ const STATUS_LABELS: Record<JobStatus | 'all', string> = {
 type Tab = 'jobs' | 'dlq';
 
 export default function JobsPage() {
+  const { isAdmin } = useMe();
   const [tab, setTab] = useState<Tab>('jobs');
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
   const qc = useQueryClient();
@@ -36,7 +38,7 @@ export default function JobsPage() {
     queryKey: ['jobs', 'dlq'],
     queryFn: () => api.get<DlqEntry[]>('/api/jobs/dlq'),
     refetchInterval: tab === 'dlq' ? 5_000 : false,
-    enabled: tab === 'dlq',
+    enabled: tab === 'dlq' && isAdmin,
   });
 
   async function retry(jobId: string) {
@@ -57,7 +59,7 @@ export default function JobsPage() {
 
       <div className="rounded-lg border border-hive-border bg-hive-surface">
         <div className="flex gap-1 border-b border-hive-border px-2 pt-1">
-          {(['jobs', 'dlq'] as Tab[]).map((t) => (
+          {(isAdmin ? (['jobs', 'dlq'] as Tab[]) : (['jobs'] as Tab[])).map((t) => (
             <button
               key={t}
               type="button"

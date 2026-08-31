@@ -14,31 +14,50 @@ function sseWrite(reply: FastifyReply, event: string, data: unknown) {
   reply.raw.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
-async function authorize(req: FastifyRequest): Promise<boolean> {
+/**
+ * Resolves the caller so the job can be scoped to them.
+ *
+ * Returns 'admin' for static-token / admin sessions, the user id for a normal
+ * session, or null when unauthenticated. The previous version only answered
+ * "is this a valid session?" and streamed any job's logs to anyone who asked —
+ * note the sibling stream in mission-stream.ts does scope by userId, so this
+ * was an omission rather than a decision.
+ */
+async function authorize(req: FastifyRequest): Promise<'admin' | { userId: string } | null> {
   // 1) Bearer token (Authorization header only — we no longer accept a ?token=
   //    query param, which would leak the token into proxy/access logs and the
   //    browser Referer header). Compared in constant time.
   const header = req.headers.authorization;
   const headerToken = typeof header === 'string' ? /^Bearer\s+(.+)$/i.exec(header.trim())?.[1] : undefined;
-  if (headerToken && timingSafeEqualStr(headerToken, env.API_AUTH_TOKEN)) return true;
+  if (headerToken && timingSafeEqualStr(headerToken, env.API_AUTH_TOKEN)) return 'admin';
   // 2) Session cookie (how the browser UI authenticates).
   const cookies = (req as FastifyRequest & { cookies?: Record<string, string | undefined> }).cookies;
   const sessionToken = cookies?.[SESSION_COOKIE];
   if (sessionToken) {
     const session = await findValidSession(sessionToken);
-    if (session) return true;
+    if (session?.user) {
+      return session.user.role === 'admin' ? 'admin' : { userId: session.user.id };
+    }
   }
-  return false;
+  return null;
 }
 
 export async function sseRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/jobs/:id/stream', async (req, reply) => {
-    if (!(await authorize(req))) {
+    const caller = await authorize(req);
+    if (!caller) {
       return reply.code(401).send({ error: { code: 'unauthorized', message: 'missing bearer token' } });
     }
 
     const jobId = req.params.id;
-    const job = await prisma.job.findUnique({ where: { id: jobId } });
+    // Scope the job to the caller. 404 rather than 403 for someone else's job,
+    // so this can't be used to probe which job ids exist.
+    const job = await prisma.job.findFirst({
+      where: {
+        id: jobId,
+        ...(caller === 'admin' ? {} : { bot: { userId: caller.userId } }),
+      },
+    });
     if (!job) {
       return reply.code(404).send({ error: { code: 'not_found', message: 'job not found' } });
     }
