@@ -19,7 +19,7 @@ API_APP="${API_APP:-hive-api}"
 UI_APP="${UI_APP:-hive-ui}"
 API_BASE="${API_BASE:-https://hive-api.fly.dev}"
 
-CONTROL_PLANE_AFTER_API=(dispatcher scheduler session-sweeper)
+CONTROL_PLANE_AFTER_API=(dispatcher scheduler session-sweeper coordinator)
 WORKERS=(
   worker-scraper worker-monitor worker-ai-agent worker-trading
   worker-mcp-host worker-ci-agent worker-task-runner
@@ -73,10 +73,10 @@ if [ "${SKIP_SEED:-0}" != "1" ]; then
 fi
 
 # --- 5-8. control plane + verify ------------------------------------------
-echo "▶ [5-7/13] dispatcher, scheduler, session-sweeper ..."
+echo "▶ [5-8/14] dispatcher, scheduler, session-sweeper, coordinator ..."
 for svc in "${CONTROL_PLANE_AFTER_API[@]}"; do deploy_cfg "$svc"; done
 echo "▶ [8/13] verify control-plane /healthz ..."
-for svc in dispatcher scheduler session-sweeper; do verify_healthz "hive-$svc"; done
+for svc in dispatcher scheduler session-sweeper coordinator; do verify_healthz "hive-$svc"; done
 
 # --- 9. ui -----------------------------------------------------------------
 echo "▶ [9/13] ui ..."

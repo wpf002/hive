@@ -27,24 +27,25 @@ model BotTemplate {
 
 // Bot — an instantiated template with concrete params
 model Bot {
-  id               String      @id @default(cuid())
+  id               String         @id @default(cuid())
   templateId       String
-  template         BotTemplate @relation(fields: [templateId], references: [id])
+  template         BotTemplate    @relation(fields: [templateId], references: [id])
   // userId = null means a shared/admin bot visible only to admins.
   // Set to the owning user's id for user-created bots.
   userId           String?
-  user             User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   name             String
   config           Json
   // Phase 5b: overrides template.affinity when set. Same shape: { region?, zone? }.
   // Null = inherit from template.
   affinityOverride Json?
-  enabled          Boolean     @default(true)
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  enabled          Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   jobs             Job[]
   schedules        Schedule[]
   alerts           Alert[]
+  missionAgents    MissionAgent[]
 
   @@index([templateId])
   @@index([userId])
@@ -191,6 +192,7 @@ model User {
   bots         Bot[]
   alerts       Alert[]
   profile      UserProfile?
+  missions     Mission[]
 }
 
 model Session {
@@ -282,7 +284,7 @@ model Alert {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   botId         String?
   bot           Bot?      @relation(fields: [botId], references: [id], onDelete: Cascade)
-  channel       String    // email | slack
+  channel       String // email | slack
   // email channel: { email: string }
   // slack channel: { webhookUrl: string }
   config        Json
@@ -326,4 +328,142 @@ model DigestRun {
   createdAt      DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ============ Swarm (missions / blackboard / proposals) ============
+
+// A mission composes existing Bots into roles that build on each other's
+// output. Domain-agnostic: the trading desk is one mission config, competitor
+// monitoring and repo triage are others. Same machine, different gatherers.
+//
+// Status/role values are plain strings with documented domains, matching the
+// convention used by Job.status, Worker.status and Alert.channel above.
+model Mission {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  domain         String // free text: 'trading' | 'recruiting' | 'racing' | ...
+  objective      String
+  status         String    @default("draft") // draft | running | paused | stopped
+  // Constraint limits keyed by rule name, read by @hive/swarm evaluate().
+  // e.g. { "mission:actions": 40, "min_independent_sources": 2 }
+  limits         Json      @default("{}")
+  // Executor verbs this mission is allowed to propose. Start every new mission
+  // at ["notify"] and widen only once the digest shows it calling things right.
+  allowedActions String[]  @default([])
+  // manual = every proposal waits for a human.
+  // auto_below_threshold = low-stakes actions self-approve (see Proposal).
+  approvalMode   String    @default("manual")
+  lastDecisionAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  agents     MissionAgent[]
+  findings   Finding[]
+  hypotheses Hypothesis[]
+  proposals  Proposal[]
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+// Binds one existing Bot into a mission under a role. The same bot can appear
+// in several missions, and in more than one role within a mission.
+model MissionAgent {
+  id         String    @id @default(cuid())
+  missionId  String
+  mission    Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  botId      String
+  bot        Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  // gatherer | extractor | analyst | adversary | constraint | coordinator | executor
+  role       String
+  // Which board event kinds this agent consumes. Empty for gatherers, which
+  // are driven by their Schedule rather than by the board.
+  subscribes String[]  @default([])
+  // For gatherers only: the single upstream source this agent owns. One
+  // gatherer per source is a hard rule — it's what makes dedup possible.
+  sourceId   String?
+  enabled    Boolean   @default(true)
+  // Rolling liveness, mirrored onto the terminal's swarm field.
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([missionId, botId, role])
+  @@index([missionId, role])
+}
+
+model Finding {
+  id          String   @id @default(cuid())
+  missionId   String
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  agentId     String
+  kind        String // mission-defined: 'price' | 'headline' | 'commit' | ...
+  payload     Json
+  sourceId    String
+  sourceKind  String
+  observedAt  DateTime
+  fetchedAt   DateTime
+  contentHash String   @db.Char(64)
+  jobId       String
+  createdAt   DateTime @default(now())
+
+  // The dedup key. Same source + same bytes = one signal, however many agents
+  // saw it. Enforced here so a buggy extractor can't inflate consensus.
+  @@unique([missionId, sourceId, contentHash])
+  @@index([missionId, kind, observedAt])
+}
+
+model Hypothesis {
+  id                   String   @id @default(cuid())
+  missionId            String
+  mission              Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  agentId              String
+  claim                String
+  confidence           Float
+  supportingFindingIds String[]
+  // Distinct sources behind the claim, set by the dedup pass. Ranking uses
+  // this and never the number of agents that agree.
+  independentSources   Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  challenges Challenge[]
+
+  @@index([missionId, createdAt])
+  @@index([missionId, independentSources])
+}
+
+model Challenge {
+  id           String     @id @default(cuid())
+  hypothesisId String
+  hypothesis   Hypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Cascade)
+  agentId      String
+  objection    String
+  severity     String // note | weakens | refutes
+  createdAt    DateTime   @default(now())
+
+  @@index([hypothesisId])
+}
+
+model Proposal {
+  id                String    @id @default(cuid())
+  missionId         String
+  mission           Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  action            String
+  params            Json
+  rationale         String
+  status            String    @default("pending") // pending | approved | rejected | expired | executed | failed
+  // Array of { rule, passed, detail } from @hive/swarm evaluate().
+  constraintResults Json      @default("[]")
+  // Hard TTL. An approval arriving after this is refused server-side — a stale
+  // approval acts on a world state that no longer exists.
+  expiresAt         DateTime
+  decidedById       String?
+  decidedAt         DateTime?
+  executedJobId     String?
+  error             String?
+  createdAt         DateTime  @default(now())
+
+  @@index([missionId, status, expiresAt])
+  @@index([status, expiresAt])
 }

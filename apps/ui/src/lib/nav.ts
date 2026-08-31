@@ -1,4 +1,4 @@
-import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Wand2, Clock, TrendingUp, Info, Bell, type LucideIcon } from 'lucide-react';
+import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Wand2, Clock, TrendingUp, Info, Bell, Radar, type LucideIcon } from 'lucide-react';
 
 // Lifecycle groups, top → bottom: overview → build things → operate them →
 // watch the fleet → get help. `group` only drives the subtle dividers the
@@ -21,6 +21,7 @@ export const NAV: NavItem[] = [
   { href: '/bot-builder', label: 'AI Builder', icon: Wand2,        group: 'build' },
   { href: '/templates',   label: 'Templates',  icon: BookTemplate, group: 'build' },
 
+  { href: '/missions',    label: 'Missions',   icon: Radar,        group: 'operate' },
   { href: '/schedules',   label: 'Schedules',  icon: Clock,        group: 'operate' },
   { href: '/jobs',        label: 'Jobs',       icon: ListChecks,   group: 'operate' },
 

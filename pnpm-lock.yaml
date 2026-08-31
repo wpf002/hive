@@ -50,6 +50,9 @@ importers:
       '@hive/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@hive/swarm':
+        specifier: workspace:*
+        version: link:../../packages/swarm
       '@hive/worker-base-ts':
         specifier: workspace:*
         version: link:../../packages/worker-base-ts
@@ -84,6 +87,46 @@ importers:
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.3
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  apps/coordinator:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.30.0
+        version: 0.30.1
+      '@hive/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@hive/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@hive/swarm':
+        specifier: workspace:*
+        version: link:../../packages/swarm
+      fastify:
+        specifier: ^4.28.0
+        version: 4.29.1
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.10.1
+      pino:
+        specifier: ^9.3.0
+        version: 9.14.0
+      pino-pretty:
+        specifier: ^11.2.0
+        version: 11.3.0
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.41
@@ -369,6 +412,25 @@ importers:
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.41
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/swarm:
+    dependencies:
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.10.1
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.41
+      tsx:
+        specifier: ^4.16.0
+        version: 4.22.3
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

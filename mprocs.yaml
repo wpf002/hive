@@ -14,6 +14,9 @@ procs:
   session-sweeper:
     shell: pnpm --filter @hive/session-sweeper dev
     autostart: true
+  coordinator:
+    shell: pnpm --filter @hive/coordinator dev
+    autostart: true
   scraper:
     shell: workers/scraper/.venv/bin/python -m hive_scraper.main
     autostart: true

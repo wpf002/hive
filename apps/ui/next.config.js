@@ -6,7 +6,10 @@
 //
 // API_PROXY_TARGET is a SERVER-side env (the API's internal URL); defaults to
 // the local dev API. In production set it to the API's flycast address.
-const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'http://localhost:4000';
+// Falls back to API_PORT so a locally bumped API port (port conflicts on 4000
+// are common) doesn't silently leave the proxy pointing at nothing.
+const API_PROXY_TARGET =
+  process.env.API_PROXY_TARGET || `http://localhost:${process.env.API_PORT || 4000}`;
 
 module.exports = {
   reactStrictMode: true,

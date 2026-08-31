@@ -19,6 +19,8 @@ import { artifactRoutes } from './routes/artifacts.js';
 import { statusRoutes } from './routes/status.js';
 import { alertRoutes } from './routes/alerts.js';
 import { onboardingRoutes } from './routes/onboarding.js';
+import { missionRoutes } from './routes/missions.js';
+import { missionStreamRoutes } from './routes/mission-stream.js';
 import { initStorage } from './lib/artifacts.js';
 import { isOriginAllowed } from './lib/cors.js';
 
@@ -64,6 +66,8 @@ app.register(artifactRoutes);
 app.register(statusRoutes);
 app.register(alertRoutes);
 app.register(onboardingRoutes);
+app.register(missionRoutes);
+app.register(missionStreamRoutes);
 
 try {
   // Honor the platform-injected $PORT (Railway, Heroku, etc.); fall back to the

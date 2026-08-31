@@ -46,6 +46,16 @@ Distributed bot orchestration platform. One control plane, eight worker pools, u
 - **Schedule** — cron-style recurring trigger for a bot.
 - **Worker** — a process in a pool that pulls jobs and executes them. Many per pool.
 
+### Swarm (missions)
+
+- **Mission** — binds existing bots into roles so they build on each other's output instead of running in isolation. Domain-agnostic: the trading desk is one config, competitor monitoring is another.
+- **MissionAgent** — one bot bound to one role (gatherer, extractor, analyst, adversary, constraint, coordinator, executor). One gatherer per source, enforced.
+- **Blackboard** — a Redis stream per mission; roles subscribe to the event kinds they care about rather than being wired into a fixed graph.
+- **Finding / Hypothesis / Challenge** — the board's contents. Findings carry mandatory provenance so duplicate observations collapse before anything counts them; claims rank by *independent sources*, never by how many agents agree.
+- **Proposal** — the coordinator's decision, gated by deterministic constraint rules and then by a human, with a hard TTL on the approval.
+
+See [`docs/SWARM.md`](docs/SWARM.md). Try it: `pnpm --filter @hive/api seed:swarm`, then open `/missions`.
+
 ## Quickstart
 
 ```bash
@@ -79,6 +89,7 @@ pnpm test                          # all unit tests (TS, no infra needed)
 pnpm verify                        # typecheck + lint + unit tests (the pre-push gate)
 pnpm --filter @hive/api test:integration   # auth/authz against a live DB (auto-skips if none)
 pnpm --filter @hive/crypto crosslang-test  # TS⇄Python secret-crypto round-trip
+pnpm --filter @hive/swarm test             # dedup + constraint rules
 # Python SSRF guard (monitor):
 workers/monitor/.venv/bin/python -m unittest discover -s workers/monitor/tests
 ```

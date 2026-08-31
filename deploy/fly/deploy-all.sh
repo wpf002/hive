@@ -30,6 +30,7 @@ SERVICES=(
   "dispatcher"
   "scheduler"
   "session-sweeper"
+  "coordinator"
   "ui"
   "worker-scraper"
   "worker-monitor"
