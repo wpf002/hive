@@ -137,6 +137,7 @@ export async function onboardingRoutes(app: FastifyInstance) {
   app.post('/api/onboarding', { preHandler: requireAuth('api') }, async (req, reply) => {
     const userId = req.user?.id;
     if (!userId) return reply.code(401).send({ error: { code: 'no_session' } });
+    const isAdmin = req.staticAuth === 'api' || req.user?.role === 'admin';
 
     const body = Body.parse(req.body);
 
@@ -171,8 +172,18 @@ export async function onboardingRoutes(app: FastifyInstance) {
         },
       });
       const cron = dailyCron(i * 2); // stagger by 2 min per bot
+      // Onboarding writes Schedule rows directly, so it would sail past the
+      // admin gate on POST /api/schedules. A starter pack shouldn't be a second
+      // door to the thing that door locks: for a non-admin the schedules are
+      // created disabled, and an admin turns the pack on.
+      const startEnabled = isAdmin;
       const schedule = await prisma.schedule.create({
-        data: { botId: bot.id, cron, enabled: true, nextRunAt: nextRunFor(cron) },
+        data: {
+          botId: bot.id,
+          cron,
+          enabled: startEnabled,
+          nextRunAt: startEnabled ? nextRunFor(cron) : null,
+        },
       });
       created.push({ botId: bot.id, botName: spec.botName, scheduleId: schedule.id });
     }
@@ -206,6 +217,17 @@ export async function onboardingRoutes(app: FastifyInstance) {
       update: { vertical: body.vertical, onboarded: true },
     });
 
-    return reply.code(201).send({ profile, botsCreated: created });
+    return reply.code(201).send({
+      profile,
+      botsCreated: created,
+      // Non-admin packs are created dormant; say so rather than letting the
+      // user believe their bots are already running.
+      schedulesEnabled: isAdmin,
+      ...(isAdmin
+        ? {}
+        : {
+            note: 'Your starter bots were created, but their schedules are off until an admin enables them.',
+          }),
+    });
   });
 }

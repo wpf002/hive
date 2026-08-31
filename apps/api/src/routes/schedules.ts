@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import cronParser from 'cron-parser';
 import { prisma } from '@hive/db';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 
 const Create = z.object({
   botId: z.string().min(1),
@@ -38,9 +38,22 @@ function botOwnerFilter(req: FastifyRequest): { userId?: string } {
   return { userId: req.user?.id ?? 'nobody' };
 }
 
+/**
+ * A schedule is a standing instruction to execute a bot's config on a worker,
+ * so it sits on the same side of the line as POST /api/bots/:id/run — which is
+ * admin-only. It was not, and the gap was a full privilege escalation: the
+ * scheduler triggers runs using API_AUTH_TOKEN, which auth.ts treats as
+ * admin-equivalent, so a non-admin who could write a Schedule row had the
+ * scheduler press "run" on their behalf. With templates like "Shell Command
+ * Runner (Native)" executing uncontained on the worker host, that was arbitrary
+ * code execution for any logged-in user.
+ *
+ * Reads stay open and ownership-scoped; every mutation is admin-only. The UI
+ * already hid these controls from non-admins, so this restores the boundary the
+ * product was designed around rather than changing it.
+ */
 export async function scheduleRoutes(app: FastifyInstance) {
-  // Any user can schedule one of their own bots.
-  app.post('/api/schedules', { preHandler: requireAuth('api') }, async (req, reply) => {
+  app.post('/api/schedules', { preHandler: requireRole('admin') }, async (req, reply) => {
     const body = Create.parse(req.body);
     const err = validateCron(body.cron);
     if (err) {
@@ -91,7 +104,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.patch<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    { preHandler: requireAuth('api') },
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const body = Patch.parse(req.body);
       const existing = await prisma.schedule.findFirst({
@@ -122,7 +135,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>(
     '/api/schedules/:id',
-    { preHandler: requireAuth('api') },
+    { preHandler: requireRole('admin') },
     async (req, reply) => {
       const existing = await prisma.schedule.findFirst({
         where: {

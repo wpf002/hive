@@ -134,7 +134,8 @@ export async function botRoutes(app: FastifyInstance) {
             }
           : {}),
       };
-      if (body.config !== undefined) {
+      const configChanged = body.config !== undefined;
+      if (configChanged) {
         const merged = { ...(existing.config as Record<string, unknown>), ...body.config };
         data.config = (await encryptBotConfig(existing.template, merged)) as Prisma.InputJsonValue;
       }
@@ -143,6 +144,23 @@ export async function botRoutes(app: FastifyInstance) {
         data,
         include: { template: true },
       });
+
+      // Scheduling a bot is an admin act, and it authorizes the config that was
+      // there at the time. Editing that config afterwards would otherwise let a
+      // non-admin owner swap in a different command and have the scheduler run
+      // it — so an edit revokes the authorization and an admin must re-enable.
+      if (configChanged && !isAdmin(req)) {
+        const { count } = await prisma.schedule.updateMany({
+          where: { botId: updated.id, enabled: true },
+          data: { enabled: false, nextRunAt: null },
+        });
+        if (count > 0) {
+          req.log.info(
+            { botId: updated.id, disabled: count },
+            'bot_config_changed_schedules_disabled',
+          );
+        }
+      }
       return maskBot(updated);
     },
   );

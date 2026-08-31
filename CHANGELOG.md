@@ -2,6 +2,29 @@
 
 All notable changes to Hive are documented here.
 
+## [Unreleased]
+
+### Security
+- **Fixed a privilege escalation that gave any logged-in non-admin arbitrary
+  code execution on a worker host.** `POST /api/schedules` required only
+  authentication, while `POST /api/bots/:id/run` required `admin`. Since the
+  scheduler triggers runs using `API_AUTH_TOKEN` — which the API treats as
+  admin-equivalent — a user could not press "run" but could install a cron that
+  pressed it for them, with no admin in the loop. Combined with templates like
+  "Shell Command Runner (Native)", which runs uncontained on the worker host
+  with `DATABASE_URL`, `REDIS_URL` and `WORKER_AUTH_TOKEN` in its environment,
+  that was full compromise. All schedule mutations are now admin-only.
+- Editing a bot's config now disables its schedules. Scheduling a bot authorizes
+  the config that existed at that moment; without this, an owner could swap the
+  command out from under an admin's approval.
+- `POST /api/onboarding` wrote Schedule rows directly, bypassing the route
+  guard. Starter packs created by non-admins are now dormant until an admin
+  enables them, and the response says so.
+
+### Added
+- Swarm layer: missions, blackboard, coordinator and the proposal approval gate.
+  See `docs/SWARM.md`.
+
 ## [1.0.0] - 2026-06-02
 
 First stable release. Hive is feature-complete across all 11 worker pools
@@ -24,10 +47,12 @@ encryption (envelope/KMS), artifacts, scheduling, and a public status page.
   `HIVE_MONITOR_ALLOW_INTERNAL=true`.
 
 ### Authorization
-- Job execution is admin-only: creating, editing, deleting, and running bots,
-  plus creating/editing/deleting schedules and cancelling jobs, require the
-  `admin` role. Non-admin users have read-only visibility. UI hides controls
+- Job execution is admin-only: running bots, creating/editing/deleting
+  schedules, and cancelling jobs require the `admin` role. UI hides controls
   they can't use.
+- Bots themselves are owner-scoped rather than admin-only — a bot is a stored
+  config and nothing runs until something triggers it, and multi-tenancy needs
+  users to own their own. The boundary is the trigger, not the record.
 
 ### Testing
 - Added a test suite (Node's built-in runner via tsx, no new deps): 27 unit
