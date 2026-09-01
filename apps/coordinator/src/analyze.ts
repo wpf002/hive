@@ -58,11 +58,21 @@ Rules:
 4. Returning an empty list is correct and common. Do not manufacture claims to seem useful.
 5. Be specific enough that an adversary could try to refute you.
 6. The most valuable claim you can make is about the SAME entity seen by more than one source. If two sources describe the same game, market, host or record, compare them and claim the difference or the agreement — that is a genuinely corroborated claim and it is what this system exists to surface. Look for the same identifier or name across sources before concluding there is nothing.
-7. If the objective asks about something the evidence cannot show — a trend when you have a single snapshot, sentiment when you only have prices — say so as a claim about the evidence itself rather than returning nothing, so the operator learns the feed is wrong for the question.`;
+7. If the objective asks about something the evidence cannot show — a trend when you have a single snapshot, sentiment when you only have prices — say so as a claim about the evidence itself rather than returning nothing, so the operator learns the feed is wrong for the question.
+8. When a "subject" is given, every finding you are shown is about that one entity and nothing else. Your job for this call is to say what the sources collectively establish about THAT entity. Do not hedge toward the general case, and do not claim anything about entities you were not shown — other subjects are analysed in their own calls.
+9. "sourcesInThisBatch" lists every source that has reported on this subject. If it holds one entry, no claim you make here can be corroborated: say what the single source shows and let the confidence reflect that it stands alone.`;
 
 export async function analyze(input: {
   missionId: string;
   objective: string;
+  /**
+   * The single entity every finding in this call is about. Empty on a mission
+   * that does not fan out.
+   *
+   * Every call is scoped to one subject on purpose: it is the only arrangement
+   * in which "do these sources agree?" is a question the evidence can answer.
+   */
+  subject?: string;
   findings: Finding[];
 }): Promise<Omit<Hypothesis, 'id' | 'agentId'>[]> {
   if (input.findings.length === 0) return [];
@@ -75,6 +85,9 @@ export async function analyze(input: {
     payload: f.payload,
   }));
 
+  const subject = input.subject?.trim() ?? '';
+  const sources = new Set(input.findings.map((f) => f.provenance.sourceId));
+
   const res = await modelSemaphore().run(() =>
     anthropic().messages.create({
       model: env.HIVE_ANALYST_MODEL,
@@ -85,7 +98,23 @@ export async function analyze(input: {
       messages: [
         {
           role: 'user',
-          content: JSON.stringify({ objective: input.objective, findings: board }, null, 2),
+          content: JSON.stringify(
+            {
+              objective: input.objective,
+              // Named explicitly rather than left for the model to infer from
+              // the payloads: it is what turns rule 6 from a hint into an
+              // instruction it can actually follow.
+              ...(subject ? { subject } : {}),
+              // Stated because "only one source saw this" is itself a finding
+              // the operator needs, and the model cannot tell the difference
+              // between a single-source subject and a batch that happened to
+              // be sampled narrowly.
+              sourcesInThisBatch: [...sources].sort(),
+              findings: board,
+            },
+            null,
+            2,
+          ),
         },
       ],
     }),

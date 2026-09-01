@@ -25,12 +25,9 @@ const ALARM = '#C4453A';
 const DIM = '#3F3F46';
 
 export function PanelRail({ snap }: { snap: MissionSnapshot }) {
-  const gatherers = snap.agents.filter((a) => a.role === 'gatherer' && a.sourceId);
-  const bySource = new Map<string, number>();
-  for (const g of gatherers) {
-    bySource.set(g.sourceId!, (bySource.get(g.sourceId!) ?? 0) + g.contributions);
-  }
-  const sources = [...bySource.entries()].sort((a, b) => b[1] - a[1]);
+  const sources = snap.sources
+    .map((s) => [s.sourceId, s.contributions] as const)
+    .sort((a, b) => b[1] - a[1]);
   const maxSrc = Math.max(1, ...sources.map(([, n]) => n));
 
   const corroborated = snap.claims.filter((c) => c.independentSources >= 2 && !c.refuted).length;
@@ -45,10 +42,8 @@ export function PanelRail({ snap }: { snap: MissionSnapshot }) {
         <Big value={String(snap.distinctFindings)} sub={`/${snap.findings} raw`} />
         <Row label="duplicate" value={`${(dupRate * 100).toFixed(0)}%`} tone={dupRate > 0.5 ? 'warn' : 'dim'} />
         <Row label="sources" value={String(sources.length)} />
-        <Row
-          label="live"
-          value={`${snap.agents.filter((a) => a.state === 'running').length}/${snap.agents.length}`}
-        />
+        {snap.fleet.subjects > 0 && <Row label="watching" value={`${snap.fleet.subjects} subjects`} />}
+        <Row label="live" value={`${snap.fleet.running}/${snap.fleet.bots} bots`} />
       </Panel>
 
       <Panel title="independence">

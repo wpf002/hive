@@ -49,6 +49,14 @@ const Env = z.object({
   // UI. Reuses ANTHROPIC_API_KEY if the ai_agent worker key is shared.
   ANTHROPIC_API_KEY: z.string().optional(),
   HIVE_BOT_BUILDER_MODEL: z.string().default('claude-sonnet-4-5'),
+  // Ceiling on how many gatherer bots one composed mission may create.
+  //
+  // A fanned-out mission is sources x subjects, which multiplies fast: five
+  // sources over a hundred tickers is five hundred bots and five hundred cron
+  // schedules. The cap is a guard against a one-line request quietly creating
+  // more scheduled work than the worker pools can serve; raise it once the
+  // pools are sized for it.
+  MISSION_MAX_GATHERERS: z.coerce.number().int().positive().default(200),
   // Daily digest: where the once-a-day bot-effectiveness report is emailed.
   // When unset, the report still generates (and logs) but isn't sent. Real
   // delivery also needs HIVE_EMAIL_PROVIDER=resend + RESEND_* (below).

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { AgentView, ClaimView } from '@/lib/mission-types';
+import type { ClaimView, SourceView } from '@/lib/mission-types';
 
 /**
  * The swarm field: evidence in motion, drawn as filaments rather than sprites.
@@ -63,13 +63,13 @@ interface Patch {
 }
 
 export function FlowField({
-  agents,
+  sources,
   claims,
   findings,
   findingsPerMin,
   decisionPulse,
 }: {
-  agents: AgentView[];
+  sources: SourceView[];
   claims: ClaimView[];
   findings: number;
   /** Live arrival rate. The field's energy tracks this, not lifetime totals. */
@@ -77,8 +77,8 @@ export function FlowField({
   decisionPulse: number | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dataRef = useRef({ agents, claims, findings, findingsPerMin });
-  dataRef.current = { agents, claims, findings, findingsPerMin };
+  const dataRef = useRef({ sources, claims, findings, findingsPerMin });
+  dataRef.current = { sources, claims, findings, findingsPerMin };
   const flareRef = useRef(0);
 
   useEffect(() => {
@@ -199,33 +199,29 @@ export function FlowField({
         return;
       }
       const {
-        agents: liveAgents,
+        sources: liveSources,
         claims: liveClaims,
         findings: liveFindings,
         findingsPerMin: liveRate,
       } = dataRef.current;
 
       // --- sources -------------------------------------------------------
-      const gatherers = liveAgents.filter((a) => a.role === 'gatherer' && a.sourceId);
-      // Weight by RECENT contribution, not lifetime. A feed that delivered a
-      // thousand findings yesterday and nothing since should look quiet, which
-      // is the whole point of watching the picture rather than a table.
-      const bySource = new Map<string, { total: number; stalled: boolean }>();
-      for (const g of gatherers) {
-        const e = bySource.get(g.sourceId!) ?? { total: 0, stalled: false };
-        e.total += g.recentContributions;
-        if (g.state === 'stalled') e.stalled = true;
-        bySource.set(g.sourceId!, e);
-      }
-      const srcIds = [...bySource.keys()].sort();
-      const patches: Patch[] = srcIds.map((sourceId, i) => ({
-        sourceId,
+      // One patch per source, however many bots sit behind it. A mission
+      // covering two hundred subjects across three feeds is still three places
+      // evidence comes from, and drawing two hundred origins would say the
+      // opposite of what the independence count means.
+      const ordered = [...liveSources].sort((a, b) => a.sourceId.localeCompare(b.sourceId));
+      const patches: Patch[] = ordered.map((s, i) => ({
+        sourceId: s.sourceId,
         x: w * 0.06 + (i % 2) * w * 0.03,
-        y: ((i + 1) / (srcIds.length + 1)) * h,
+        y: ((i + 1) / (ordered.length + 1)) * h,
+        // Weight by RECENT contribution, not lifetime. A feed that delivered a
+        // thousand findings yesterday and nothing since should look quiet,
+        // which is the whole point of watching the picture rather than a table.
         // Floor of 0.15 so a silent feed still renders a thin thread rather
         // than vanishing — absent and idle must not look identical.
-        weight: Math.max(0.15, bySource.get(sourceId)!.total),
-        stalled: bySource.get(sourceId)!.stalled,
+        weight: Math.max(0.15, s.recentContributions),
+        stalled: s.state === 'stalled',
       }));
 
       // Comb centre — where evidence is heading.
@@ -390,7 +386,7 @@ export function FlowField({
       ref={canvasRef}
       className="absolute inset-0 block h-full w-full"
       role="img"
-      aria-label={`Swarm field: ${findings} findings flowing from ${new Set(agents.map((a) => a.sourceId).filter(Boolean)).size} sources into ${claims.length} claims`}
+      aria-label={`Swarm field: ${findings} findings flowing from ${sources.length} sources into ${claims.length} claims`}
     />
   );
 }

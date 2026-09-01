@@ -35,6 +35,16 @@ export const ROLE_SUBSCRIPTIONS: Record<SwarmRole, BoardEventType[]> = {
  */
 export const Provenance = z.object({
   sourceId: z.string().min(1), // stable id of the upstream source
+  /**
+   * The entity this observation is about — a ticker, a game, a repo, a URL.
+   * Empty means the whole feed.
+   *
+   * Independence is scored *within* a subject: two sources agreeing about AAPL
+   * is corroboration, one source on AAPL plus another on MSFT is not. Without
+   * this, fanning a mission out over hundreds of subjects would let unrelated
+   * observations count as agreement.
+   */
+  subject: z.string().default(''),
   sourceKind: z.string().min(1), // 'http' | 'rss' | 'exchange' | 'repo' | ...
   observedAt: z.string().datetime(), // when the source produced it, not when we read it
   fetchedAt: z.string().datetime(),

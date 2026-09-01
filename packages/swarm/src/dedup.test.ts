@@ -3,8 +3,14 @@ import assert from 'node:assert/strict';
 import { collapseFindings, clusterByClaim, scoreIndependence } from './dedup.js';
 import type { Challenge, Finding, Hypothesis } from './types.js';
 
-const prov = (sourceId: string, hash: string, observedAt = '2026-01-01T00:00:00.000Z') => ({
+const prov = (
+  sourceId: string,
+  hash: string,
+  observedAt = '2026-01-01T00:00:00.000Z',
+  subject = '',
+) => ({
   sourceId,
+  subject,
   sourceKind: 'http',
   observedAt,
   fetchedAt: '2026-01-01T00:00:01.000Z',
@@ -12,13 +18,19 @@ const prov = (sourceId: string, hash: string, observedAt = '2026-01-01T00:00:00.
   jobId: 'j1',
 });
 
-const finding = (id: string, sourceId: string, hash: string, observedAt?: string): Finding => ({
+const finding = (
+  id: string,
+  sourceId: string,
+  hash: string,
+  observedAt?: string,
+  subject = '',
+): Finding => ({
   id,
   missionId: 'm1',
   agentId: `a-${id}`,
   kind: 'price',
   payload: {},
-  provenance: prov(sourceId, hash, observedAt),
+  provenance: prov(sourceId, hash, observedAt, subject),
 });
 
 const hyp = (id: string, claim: string, supporting: string[], confidence = 0.8): Hypothesis => ({
@@ -161,4 +173,75 @@ test('selectCluster returns null for an unrecognisable claim', () => {
   assert.equal(selectCluster(clusters, null), null);
   assert.equal(selectCluster(clusters, '   '), null);
   assert.equal(selectCluster([], 'anything'), null);
+});
+
+// ---- subject fan-out -------------------------------------------------------
+// A wide mission's whole value rests on these two properties: that two subjects
+// on one source stay separate, and that agreement is only counted within a
+// subject. Both fail silently if broken — the mission keeps running and just
+// reports numbers that aren't true.
+
+test('identical bytes from two subjects on one source are two findings', () => {
+  // 200 monitors on one provider all returning {"status":"ok"} hash the same.
+  // Collapsing them would leave one subject standing and erase 199.
+  const out = collapseFindings([
+    finding('1', 'pingdom', 'aa', undefined, 'api.example.com'),
+    finding('2', 'pingdom', 'aa', undefined, 'web.example.com'),
+    finding('3', 'pingdom', 'aa', undefined, 'db.example.com'),
+  ]);
+  assert.equal(out.length, 3);
+});
+
+test('identical bytes from one subject on one source still collapse', () => {
+  const out = collapseFindings([
+    finding('1', 'pingdom', 'aa', undefined, 'api.example.com'),
+    finding('2', 'pingdom', 'aa', undefined, 'api.example.com'),
+  ]);
+  assert.equal(out.length, 1);
+});
+
+test('two sources on the same subject corroborate', () => {
+  const findings = [
+    finding('f1', 'nasdaq', 'aa', undefined, 'AAPL'),
+    finding('f2', 'yahoo', 'bb', undefined, 'AAPL'),
+  ];
+  const scored = scoreIndependence(hyp('h1', 'AAPL is moving', ['f1', 'f2']), findings);
+  assert.equal(scored.independentSources, 2);
+});
+
+test('two sources on different subjects do not corroborate', () => {
+  // The failure a wide mission would otherwise manufacture for free: breadth
+  // read as agreement. Each entity was seen exactly once.
+  const findings = [
+    finding('f1', 'nasdaq', 'aa', undefined, 'AAPL'),
+    finding('f2', 'yahoo', 'bb', undefined, 'MSFT'),
+  ];
+  const scored = scoreIndependence(hyp('h1', 'tech is moving', ['f1', 'f2']), findings);
+  assert.equal(scored.independentSources, 1);
+});
+
+test('a cross-subject claim scores its best single subject', () => {
+  const findings = [
+    finding('f1', 'nasdaq', 'aa', undefined, 'AAPL'),
+    finding('f2', 'yahoo', 'bb', undefined, 'AAPL'),
+    finding('f3', 'nasdaq', 'cc', undefined, 'MSFT'),
+  ];
+  const scored = scoreIndependence(hyp('h1', 'mixed', ['f1', 'f2', 'f3']), findings);
+  assert.equal(scored.independentSources, 2);
+});
+
+test('clusters report the subject their support was counted on', () => {
+  const findings = [
+    finding('f1', 'nasdaq', 'aa', undefined, 'AAPL'),
+    finding('f2', 'yahoo', 'bb', undefined, 'AAPL'),
+  ];
+  const [cluster] = clusterByClaim([hyp('h1', 'AAPL is moving', ['f1', 'f2'])], findings);
+  assert.equal(cluster.subject, 'AAPL');
+  assert.equal(cluster.independentSources, 2);
+});
+
+test('a mission with no fan-out is scored exactly as before', () => {
+  const findings = [finding('f1', 'espn', 'aa'), finding('f2', 'draftkings', 'bb')];
+  const scored = scoreIndependence(hyp('h1', 'line moved', ['f1', 'f2']), findings);
+  assert.equal(scored.independentSources, 2);
 });

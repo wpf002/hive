@@ -49,10 +49,10 @@ export default function MissionTerminalPage({ params }: { params: { id: string }
     );
   }
 
-  const live = snapshot.agents.filter((a) => a.state === 'running').length;
-  const stalled = snapshot.agents.filter((a) => a.state === 'stalled').length;
+  const live = snapshot.fleet.running;
+  const stalled = snapshot.sources.filter((s) => s.state === 'stalled').length;
   const pending = snapshot.proposals.filter((p) => p.status === 'pending').length;
-  const sources = new Set(snapshot.agents.map((a) => a.sourceId).filter(Boolean)).size;
+  const sources = snapshot.sources.length;
   const echoing = snapshot.claims.filter((c) => c.agentCount > 2 && c.independentSources < 2).length;
 
   return (
@@ -72,7 +72,7 @@ export default function MissionTerminalPage({ params }: { params: { id: string }
           {snapshot.status}
         </span>
         <span>
-          agents <b className="text-hive-text">{snapshot.agents.length}</b> · live{' '}
+          agents <b className="text-hive-text">{snapshot.fleet.bots}</b> · live{' '}
           <b className="text-honey-500">{live}</b>
         </span>
         {stalled > 0 && <span className="text-red-500">stalled {stalled}</span>}
@@ -120,7 +120,7 @@ export default function MissionTerminalPage({ params }: { params: { id: string }
           to 0x0, which renders nothing at all. */}
       <div className="relative min-h-0 flex-1 bg-[#07070a]">
         <FlowField
-          agents={snapshot.agents}
+          sources={snapshot.sources}
           claims={snapshot.claims}
           findings={snapshot.findings}
           findingsPerMin={snapshot.findingsPerMin}

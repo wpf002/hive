@@ -382,15 +382,27 @@ model MissionAgent {
   // are driven by their Schedule rather than by the board.
   subscribes String[]  @default([])
   // For gatherers only: the single upstream source this agent owns. One
-  // gatherer per source is a hard rule — it's what makes dedup possible.
+  // gatherer per (source, subject) is a hard rule — it's what makes dedup possible.
   sourceId   String?
+  // The entity this gatherer covers within that source — a ticker, a game, a
+  // repo, a URL. Empty means the gatherer owns the whole feed.
+  //
+  // This is what lets a mission run hundreds of bots without faking consensus:
+  // scale comes from covering more subjects, never from more bots on the same
+  // (source, subject) pair, which would be one signal counted twice.
+  subject    String    @default("")
   enabled    Boolean   @default(true)
   // Rolling liveness, mirrored onto the terminal's swarm field.
   lastSeenAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@unique([missionId, botId, role])
+  // One gatherer per (source, subject). Enforced here and not only in the
+  // composer, because a duplicate pair is indistinguishable downstream from
+  // genuine corroboration.
+  @@unique([missionId, role, sourceId, subject])
   @@index([missionId, role])
+  @@index([missionId, subject])
 }
 
 model Finding {
@@ -401,6 +413,11 @@ model Finding {
   kind        String // mission-defined: 'price' | 'headline' | 'commit' | ...
   payload     Json
   sourceId    String
+  // The entity this observation is about, copied from the gatherer that
+  // produced it. Part of the dedup key: two subjects on one source can produce
+  // byte-identical payloads (a monitor returning {"status":"ok"} for 200 URLs),
+  // and without this every subject but the first would silently vanish.
+  subject     String   @default("")
   sourceKind  String
   observedAt  DateTime
   fetchedAt   DateTime
@@ -408,10 +425,12 @@ model Finding {
   jobId       String
   createdAt   DateTime @default(now())
 
-  // The dedup key. Same source + same bytes = one signal, however many agents
-  // saw it. Enforced here so a buggy extractor can't inflate consensus.
-  @@unique([missionId, sourceId, contentHash])
+  // The dedup key. Same source + same subject + same bytes = one signal,
+  // however many agents saw it. Enforced here so a buggy extractor can't
+  // inflate consensus.
+  @@unique([missionId, sourceId, subject, contentHash])
   @@index([missionId, kind, observedAt])
+  @@index([missionId, subject, createdAt])
 }
 
 model Hypothesis {

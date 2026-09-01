@@ -33,6 +33,26 @@ const Env = z.object({
   ADVERSARY_MIN_INTERVAL_MS: z.coerce.number().int().nonnegative().default(45_000),
   // Findings per analyst call. Larger batches mean fewer, better-informed calls.
   ANALYST_BATCH: z.coerce.number().int().positive().default(40),
+  // Subjects analysed per pass on a fanned-out mission.
+  //
+  // This is the direct cost multiplier and the one knob worth tuning. A mission
+  // with no fan-out has a single (empty) subject and makes one call per pass, so
+  // this changes nothing for it. A mission covering S subjects sweeps all of
+  // them every ceil(S / this) * ANALYST_MIN_INTERVAL_MS: 100 subjects at 4 per
+  // 30s pass is a full sweep every ~12 minutes, for roughly 8 calls a minute.
+  // Raising it buys freshness linearly and costs money linearly.
+  ANALYST_SUBJECTS_PER_PASS: z.coerce.number().int().positive().default(4),
+  // How many board entries a mission loop keeps in view.
+  //
+  // Size it above subjects x sources x a few observations each, or a fanned-out
+  // mission will age a subject's evidence out of the window before its turn in
+  // the rotation comes round — which looks exactly like a source going quiet.
+  SWARM_BOARD_WINDOW: z.coerce.number().int().positive().default(5_000),
+  // Claims waiting for the adversary. Bounded because at fan-out scale the
+  // analyst can produce claims faster than one-per-pass can attack them, and an
+  // unbounded FIFO would spend the whole mission working through stale claims
+  // while every recent one waits behind them.
+  ADVERSARY_QUEUE_MAX: z.coerce.number().int().positive().default(200),
   HIVE_ANALYST_MODEL: z.string().default('claude-sonnet-5'),
   HIVE_ADVERSARY_MODEL: z.string().default('claude-sonnet-5'),
 

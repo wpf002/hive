@@ -37,7 +37,7 @@ export async function runMissionLoop(
   // Incremental, bounded board view: each wake reads only what landed since
   // the last one, and the window is capped so a mission running for days can't
   // grow this loop's memory without limit.
-  const view = new BoardView(board);
+  const view = new BoardView(board, env.SWARM_BOARD_WINDOW);
   let lastDecisionAt = 0;
   // Set when evidence arrived but the rate floor deferred the decision. Without
   // it, a batch that lands inside the floor is acked, folded into the view, and

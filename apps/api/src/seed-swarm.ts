@@ -179,6 +179,7 @@ async function main() {
     payload: { note: body },
     provenance: {
       sourceId,
+      subject: '',
       sourceKind: 'http',
       observedAt: minsAgo(30 - n).toISOString(),
       fetchedAt: minsAgo(29 - n).toISOString(),

@@ -13,14 +13,22 @@ export const SWARM_ROLES = [
 ] as const;
 export type SwarmRole = (typeof SWARM_ROLES)[number];
 
-export interface AgentView {
-  id: string;
-  botId: string;
-  botName: string;
-  role: string;
+/**
+ * One upstream source with its whole fleet of gatherers folded in.
+ *
+ * Aggregated server-side: a fanned-out mission runs one bot per
+ * (source, subject), so this snapshot would otherwise carry hundreds of rows a
+ * second to every open terminal for a list that was always grouped by source
+ * before anything drew it.
+ */
+export interface SourceView {
+  sourceId: string;
   pool: string;
-  sourceId: string | null;
-  /** running | idle | stalled | disabled */
+  /** Gatherer bots on this source — one per subject it covers. */
+  bots: number;
+  subjects: number;
+  running: number;
+  /** running | idle | stalled | disabled — worst across the fleet. */
   state: string;
   contributions: number;
   /** Findings from this source in the last few minutes. */
@@ -31,6 +39,8 @@ export interface ClaimView {
   id: string;
   claim: string;
   independentSources: number;
+  /** The entity the sources agreed about. Empty on a mission with no fan-out. */
+  subject: string;
   agentCount: number;
   confidence: number;
   refuted: boolean;
@@ -57,7 +67,9 @@ export interface MissionSnapshot {
   name: string;
   status: string;
   objective: string;
-  agents: AgentView[];
+  sources: SourceView[];
+  /** The swarm at a glance: how many bots, how many are working, how wide. */
+  fleet: { bots: number; running: number; subjects: number };
   findings: number;
   distinctFindings: number;
   claims: ClaimView[];

@@ -224,8 +224,20 @@ function Field({ missionId }: { missionId: string }) {
       {/* one line of numbers, not a dashboard */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-hive-subtle">
         <span className="truncate text-hive-text">{snapshot.name}</span>
+        {/* The swarm's shape, in the order it actually matters: how many bots
+            are working, how much ground they cover, and from how many places
+            the evidence comes. Bot count alone is the number that means the
+            least — a hundred bots on one feed is still one feed. */}
         <span>
-          {snapshot.agents.filter((a) => a.role === 'gatherer').length} feeds
+          {snapshot.fleet.running}/{snapshot.fleet.bots} bots
+        </span>
+        {snapshot.fleet.subjects > 0 && (
+          <span>
+            {snapshot.fleet.subjects} watching
+          </span>
+        )}
+        <span>
+          {snapshot.sources.length} sources
         </span>
         <span>
           {snapshot.distinctFindings} findings
@@ -270,7 +282,7 @@ function Field({ missionId }: { missionId: string }) {
 
       <div className="relative min-h-0 flex-1">
         <FlowField
-          agents={snapshot.agents}
+          sources={snapshot.sources}
           claims={snapshot.claims}
           findings={snapshot.findings}
           findingsPerMin={snapshot.findingsPerMin}
@@ -296,7 +308,7 @@ function Field({ missionId }: { missionId: string }) {
                       : 'text-red-500',
                 )}
               >
-                {corroborationLabel(top.independentSources, top.refuted)}
+                {corroborationLabel(top.independentSources, top.refuted, top.subject)}
               </span>
               <span className={cn(top.refuted && 'text-hive-subtle line-through')}>{top.claim}</span>
             </p>
@@ -330,12 +342,16 @@ function Field({ missionId }: { missionId: string }) {
 /**
  * "2 src" told you nothing unless you already knew the model. The number that
  * matters is how many independent feeds agree, so say that.
+ *
+ * The subject is named because on a wide mission "2 sources agree" is only half
+ * the sentence — agree about which of the two hundred things being watched?
  */
-function corroborationLabel(sources: number, refuted: boolean): string {
+function corroborationLabel(sources: number, refuted: boolean, subject: string): string {
+  const on = subject ? ` on ${subject}` : '';
   if (refuted) return 'Refuted —';
   if (sources === 0) return 'Unverified —';
-  if (sources === 1) return 'Only 1 source —';
-  return `${sources} sources agree —`;
+  if (sources === 1) return `Only 1 source${on} —`;
+  return `${sources} sources agree${on} —`;
 }
 
 function Approvals({ missionId, proposals }: { missionId: string; proposals: ProposalView[] }) {

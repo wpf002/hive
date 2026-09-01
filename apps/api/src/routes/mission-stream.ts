@@ -32,20 +32,32 @@ function sseWrite(reply: FastifyReply, event: string, data: unknown) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-export interface AgentView {
-  id: string;
-  botId: string;
-  botName: string;
-  role: string;
+/**
+ * One upstream source, with its whole fleet of gatherers folded into it.
+ *
+ * Aggregated on the server rather than shipped per-bot. A fanned-out mission
+ * has one gatherer per (source, subject), so a 3-source x 100-subject mission
+ * is 300 agents — and this snapshot goes out once a second to every open
+ * terminal. Every consumer immediately grouped by sourceId anyway, so sending
+ * the rows individually was paying to transmit and re-render a list nobody
+ * looked at row by row.
+ */
+export interface SourceView {
+  sourceId: string;
   pool: string;
-  sourceId: string | null;
-  /** running | idle | stalled | disabled */
+  /** Gatherer bots on this source — one per subject it covers. */
+  bots: number;
+  /** How many distinct subjects this source is aimed at. */
+  subjects: number;
+  /** Bots on this source currently working. */
+  running: number;
+  /** Worst state across the fleet: stalled beats running beats idle beats disabled. */
   state: string;
-  /** Findings this agent has contributed, for the forage trails in the UI. */
+  /** Findings this source has contributed, for the forage trails in the UI. */
   contributions: number;
-  /** Findings from this agent's source in the last few minutes. Drives how much
-   *  of the field a source occupies, so the picture tracks live work rather
-   *  than lifetime totals — an exhausted feed should go dark. */
+  /** Findings from this source in the last few minutes. Drives how much of the
+   *  field it occupies, so the picture tracks live work rather than lifetime
+   *  totals — an exhausted feed should go dark. */
   recentContributions: number;
 }
 
@@ -54,13 +66,17 @@ export interface MissionSnapshot {
   name: string;
   status: string;
   objective: string;
-  agents: AgentView[];
+  sources: SourceView[];
+  /** The swarm at a glance: how many bots, how many are working, how wide. */
+  fleet: { bots: number; running: number; subjects: number };
   findings: number;
   distinctFindings: number;
   claims: {
     id: string;
     claim: string;
     independentSources: number;
+    /** The entity the sources agreed about. Empty on a mission with no fan-out. */
+    subject: string;
     agentCount: number;
     confidence: number;
     refuted: boolean;
@@ -120,9 +136,13 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   const distinct = collapseFindings(snap.findings);
   const clusters = clusterByClaim(snap.hypotheses, distinct, snap.challenges);
 
-  const contributions = new Map<string, number>();
+  // Keyed by source rather than by bot: the trails in the field are per-source,
+  // and on a fanned-out mission a per-bot count is a hundred numbers nobody
+  // reads instead of the one they do.
+  const contributionsBySource = new Map<string, number>();
   for (const f of snap.findings) {
-    contributions.set(f.agentId, (contributions.get(f.agentId) ?? 0) + 1);
+    const id = f.provenance.sourceId;
+    contributionsBySource.set(id, (contributionsBySource.get(id) ?? 0) + 1);
   }
 
 
@@ -140,7 +160,18 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   const recentBySource = new Map(recentRows.map((r) => [r.sourceId, r._count._all]));
   const findingsPerMin =
     recentRows.reduce((sum, r) => sum + r._count._all, 0) / ACTIVITY_WINDOW_MIN;
-  const agents: AgentView[] = mission.agents.map((a) => {
+  // Worst-first, so one broken bot in a fleet of a hundred is still visible.
+  // Averaging or majority-voting the state would hide exactly the case an
+  // operator needs to see.
+  const STATE_RANK = ['stalled', 'running', 'idle', 'disabled'];
+  const bySourceAgg = new Map<
+    string,
+    { pool: string; bots: number; running: number; subjects: Set<string>; state: string }
+  >();
+  let fleetRunning = 0;
+  const allSubjects = new Set<string>();
+
+  for (const a of mission.agents) {
     const latest = a.bot.jobs[0];
     const age = latest ? now - latest.createdAt.getTime() : Infinity;
     const seenAge = a.lastSeenAt ? now - a.lastSeenAt.getTime() : Infinity;
@@ -152,18 +183,42 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     else if (latest?.status === 'failed') state = 'stalled';
     else if (latest?.status === 'running') state = age > STUCK_AFTER_MS ? 'stalled' : 'running';
     else if (Math.min(age, seenAge) < ACTIVE_WINDOW_MS) state = 'running';
-    return {
-      id: a.id,
-      botId: a.botId,
-      botName: a.bot.name,
-      role: a.role,
+    if (state === 'running') fleetRunning += 1;
+    if (a.subject) allSubjects.add(a.subject);
+
+    if (!a.sourceId) continue;
+    const agg = bySourceAgg.get(a.sourceId) ?? {
       pool: a.bot.template.poolType,
-      sourceId: a.sourceId,
-      state,
-      contributions: contributions.get(a.botId) ?? 0,
-      recentContributions: a.sourceId ? (recentBySource.get(a.sourceId) ?? 0) : 0,
+      bots: 0,
+      running: 0,
+      subjects: new Set<string>(),
+      state: 'disabled',
     };
-  });
+    agg.bots += 1;
+    if (state === 'running') agg.running += 1;
+    if (a.subject) agg.subjects.add(a.subject);
+    if (STATE_RANK.indexOf(state) < STATE_RANK.indexOf(agg.state)) agg.state = state;
+    bySourceAgg.set(a.sourceId, agg);
+  }
+
+  const sources: SourceView[] = [...bySourceAgg.entries()]
+    .map(([sourceId, agg]) => ({
+      sourceId,
+      pool: agg.pool,
+      bots: agg.bots,
+      subjects: agg.subjects.size,
+      running: agg.running,
+      state: agg.state,
+      contributions: contributionsBySource.get(sourceId) ?? 0,
+      recentContributions: recentBySource.get(sourceId) ?? 0,
+    }))
+    .sort((a, b) => a.sourceId.localeCompare(b.sourceId));
+
+  const fleet = {
+    bots: mission.agents.length,
+    running: fleetRunning,
+    subjects: allSubjects.size,
+  };
 
   const proposals = await prisma.proposal.findMany({
     where: { missionId },
@@ -209,13 +264,15 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     name: mission.name,
     status: mission.status,
     objective: mission.objective,
-    agents,
+    sources,
+    fleet,
     findings: snap.findings.length,
     distinctFindings: distinct.length,
     claims: clusters.slice(0, 40).map((c) => ({
       id: c.members[0]?.id ?? c.claim,
       claim: c.members[0]?.claim ?? c.claim,
       independentSources: c.independentSources,
+      subject: c.subject,
       agentCount: c.members.length,
       confidence: c.meanConfidence,
       refuted: c.refuted,

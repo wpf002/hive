@@ -78,6 +78,7 @@ export async function runGathererBridge(
             payload: item.payload,
             provenance: {
               sourceId: agent.sourceId,
+              subject: agent.subject,
               sourceKind: job.bot.template.name,
               observedAt: isoUtc(item.observedAt, new Date(norm.fetchedAt)),
               fetchedAt: norm.fetchedAt,
@@ -98,6 +99,7 @@ export async function runGathererBridge(
                 kind: finding.kind,
                 payload: finding.payload as Prisma.InputJsonValue,
                 sourceId: agent.sourceId,
+                subject: agent.subject,
                 sourceKind: finding.provenance.sourceKind,
                 observedAt: new Date(finding.provenance.observedAt),
                 fetchedAt: new Date(finding.provenance.fetchedAt),
@@ -108,7 +110,7 @@ export async function runGathererBridge(
           } catch (e) {
             if ((e as { code?: string }).code === 'P2002') {
               duplicate += 1;
-              continue; // same source, same bytes — one signal, already counted
+              continue; // same source, same subject, same bytes — already counted
             }
             throw e;
           }
