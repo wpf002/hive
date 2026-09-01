@@ -26,7 +26,6 @@ import type { AgentView, ClaimView } from '@/lib/mission-types';
  */
 
 const HONEY = [255, 193, 7] as const;
-const BURNT = [255, 107, 26] as const;
 const ALARM = [196, 69, 58] as const;
 
 /** Filaments in flight per unit of source throughput. Tuned for density, capped below. */
@@ -49,8 +48,10 @@ interface Particle {
   speed: number;
   /** Index of the source patch this filament came from. */
   src: number;
-  /** Colour bias: 0 = honey, 1 = burnt (carrying), 2 = alarm (from a stalled source). */
+  /** Colour: 0 = honey, 2 = alarm (this strand's source has no live worker). */
   tint: number;
+  /** Vertical offset on the comb this strand aims for. */
+  aimY: number;
 }
 
 interface Patch {
@@ -173,7 +174,16 @@ export function FlowField({
       p.py = p.y;
       p.life = Math.random() * 0.35; // stagger, so the field doesn't pulse in unison
       p.speed = 1.1 + Math.random() * 2.6;
-      p.tint = patch.stalled ? 2 : Math.random() < 0.22 ? 1 : 0;
+      // Aim at a spread across the comb face, not its exact centre. Every
+      // strand steering for one point converges them all onto a single
+      // latitude, which stacks into a bright horizontal streak running out from
+      // the comb — the same artifact in a subtler form.
+      p.aimY = (Math.random() - 0.5) * 2.2;
+      // Colour carries one meaning only: this source has no live worker. The
+      // previous version tinted 22% of strands at random, which looked like it
+      // encoded something and encoded nothing — the worst property a signal in
+      // a status display can have.
+      p.tint = patch.stalled ? 2 : 0;
       void t;
     };
 
@@ -241,7 +251,7 @@ export function FlowField({
             pick -= patches[s].weight;
             if (pick <= 0) { src = s; break; }
           }
-          const p: Particle = { x: 0, y: 0, px: 0, py: 0, life: 1, speed: 1, src, tint: 0 };
+          const p: Particle = { x: 0, y: 0, px: 0, py: 0, life: 1, speed: 1, src, tint: 0, aimY: 0 };
           respawn(p, patches, t);
           particles.push(p);
         }
@@ -276,8 +286,9 @@ export function FlowField({
         // neighbouring strands braid into filaments across the whole frame; a
         // weaker bearing to the comb keeps the net flow inbound so the picture
         // still reads as evidence arriving rather than as an idle screensaver.
-        const toComb = Math.atan2(combY - p.y, combX - p.x);
-        const dist = Math.hypot(combX - p.x, combY - p.y);
+        const aimY = combY + p.aimY * combR;
+        const toComb = Math.atan2(aimY - p.y, combX - p.x);
+        const dist = Math.hypot(combX - p.x, aimY - p.y);
         const flow = angleAt(p.x, p.y, t);
         // Drift falls away past the comb rather than switching off at it.
         //
@@ -320,7 +331,7 @@ export function FlowField({
 
         // Fade in and out so strands don't pop.
         const a = Math.sin(p.life * Math.PI) * 0.75;
-        const c = p.tint === 2 ? ALARM : p.tint === 1 ? BURNT : HONEY;
+        const c = p.tint === 2 ? ALARM : HONEY;
         ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
         ctx.beginPath();
         ctx.moveTo(p.px, p.py);

@@ -241,12 +241,12 @@ function Field({ missionId }: { missionId: string }) {
 
       {/* The swarm only speaks when it has something corroborated, or something
           it wants permission for. Silence is the normal state. */}
-      <div className="shrink-0 border-t border-hive-border/60 px-4 py-2.5">
+      <div className="max-h-24 shrink-0 overflow-hidden border-t border-hive-border/60 px-4 py-2.5">
         <div className="mx-auto max-w-3xl">
           {pending.length > 0 ? (
             <Approvals missionId={missionId} proposals={pending} />
           ) : top ? (
-            <p className="font-mono text-xs leading-relaxed">
+            <p className="line-clamp-2 font-mono text-xs leading-relaxed" title={top.claim}>
               <span
                 className={cn(
                   'mr-2 tabular-nums',
