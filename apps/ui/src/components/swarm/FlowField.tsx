@@ -162,8 +162,7 @@ export function FlowField({
         p.x = patch.x + Math.cos(a) * r;
         p.y = patch.y + Math.sin(a) * r;
       } else {
-        // Bias the scatter left-of-comb so the drift still reads as inbound.
-        p.x = Math.random() * w * 0.82;
+        p.x = Math.random() * w;
         p.y = Math.random() * h;
       }
       p.px = p.x;
@@ -276,8 +275,14 @@ export function FlowField({
         const toComb = Math.atan2(combY - p.y, combX - p.x);
         const dist = Math.hypot(combX - p.x, combY - p.y);
         const flow = angleAt(p.x, p.y, t);
-        // Drift strengthens close in, so strands gather at the comb.
-        const drift = Math.min(0.5, 0.12 + (1 - Math.min(1, dist / (w * 0.8))) * 0.5);
+        // Drift only applies on the approach side. Past the comb it would pull
+        // strands back toward it, and they would oscillate about it forever
+        // instead of carrying on — which is both an artifact and the reason the
+        // far side of the field used to stay empty.
+        const approaching = p.x < combX;
+        const drift = approaching
+          ? Math.min(0.5, 0.12 + (1 - Math.min(1, dist / (w * 0.8))) * 0.5)
+          : 0;
         const heading = flow * (1 - drift) + toComb * drift;
 
         const sp = reduceMotion ? 0 : p.speed;
@@ -290,15 +295,17 @@ export function FlowField({
         // turning over as new evidence changes the population.
         p.life += 0.0011 + p.speed * 0.0004;
 
-        // Wrap vertically rather than respawning: in a wide, short viewport a
-        // hard edge kill empties the top and bottom bands within seconds.
+        // Wrap on both axes rather than killing at an edge. A hard edge kill
+        // empties whole bands of the field within seconds — vertically in a
+        // short viewport, and horizontally everywhere past the comb, which is
+        // what left a black column down the right of the screen.
         if (p.y < -10) { p.y += h + 20; p.py = p.y; }
         else if (p.y > h + 10) { p.y -= h + 20; p.py = p.y; }
+        if (p.x < -10) { p.x += w + 20; p.px = p.x; }
+        else if (p.x > w + 10) { p.x -= w + 20; p.px = p.x; }
 
-        // Capture on arrival. Letting strands pass the comb leaves them
-        // oscillating about its latitude, which stacks into a bright horizontal
-        // bar — an artifact of the steering, not a signal about anything.
-        if (p.life >= 1 || dist < combR * 1.35 || p.x > combX + combR || p.x < -30) {
+        // Capture only at the comb itself — arriving evidence is absorbed.
+        if (p.life >= 1 || dist < combR * 1.15) {
           respawn(p, patches, t);
           continue;
         }

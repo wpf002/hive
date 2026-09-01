@@ -140,7 +140,7 @@ function Prompt({
         ) : (
           <button
             onClick={onOpen}
-            className="flex-1 text-left font-mono text-sm text-hive-subtle/70 hover:text-hive-subtle"
+            className="flex-1 text-left font-mono text-sm uppercase tracking-[0.08em] text-hive-subtle/70 hover:text-hive-subtle"
           >
             Watch something else…
           </button>
@@ -321,14 +321,14 @@ function Approvals({ missionId, proposals }: { missionId: string; proposals: Pro
         <button
           onClick={() => respond(p.id, 'approve')}
           disabled={busy === p.id}
-          className="rounded border border-honey-500 px-2.5 py-0.5 font-mono text-[11px] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-40"
+          className="rounded border border-honey-500 px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-40"
         >
           {p.action}
         </button>
         <button
           onClick={() => respond(p.id, 'reject')}
           disabled={busy === p.id}
-          className="rounded border border-hive-muted px-2.5 py-0.5 font-mono text-[11px] text-hive-subtle hover:border-red-700 hover:text-red-400 disabled:opacity-40"
+          className="rounded border border-hive-muted px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-hive-subtle hover:border-red-700 hover:text-red-400 disabled:opacity-40"
         >
           no
         </button>
