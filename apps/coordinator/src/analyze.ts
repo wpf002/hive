@@ -56,7 +56,9 @@ Rules:
 2. A claim supported by two different sources is worth far more than one supported by two findings from the same source. Prefer claims you can corroborate across sources.
 3. Do not restate a finding as a claim. "ESPN reports LAL 102-98" is a finding; "LAL is closing out a game they trailed" is a claim.
 4. Returning an empty list is correct and common. Do not manufacture claims to seem useful.
-5. Be specific enough that an adversary could try to refute you.`;
+5. Be specific enough that an adversary could try to refute you.
+6. The most valuable claim you can make is about the SAME entity seen by more than one source. If two sources describe the same game, market, host or record, compare them and claim the difference or the agreement — that is a genuinely corroborated claim and it is what this system exists to surface. Look for the same identifier or name across sources before concluding there is nothing.
+7. If the objective asks about something the evidence cannot show — a trend when you have a single snapshot, sentiment when you only have prices — say so as a claim about the evidence itself rather than returning nothing, so the operator learns the feed is wrong for the question.`;
 
 export async function analyze(input: {
   missionId: string;

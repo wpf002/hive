@@ -247,9 +247,17 @@ export function FlowField({
       }
 
       // --- fade instead of clear: this is what makes the trails ----------
+      //
+      // Painted in DEVICE space over the whole bitmap, not in CSS space over
+      // `w`/`h`. Every other bound here is derived from `w`, so if it is ever
+      // behind the element's real size the uncovered strip is simply never
+      // painted and shows as a hard black bar. Filling the bitmap itself cannot
+      // be wrong, whatever `w` currently believes.
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = `rgba(7,7,10,${reduceMotion ? 1 : TRAIL_FADE})`;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       // --- filaments ------------------------------------------------------
       ctx.globalCompositeOperation = 'lighter';

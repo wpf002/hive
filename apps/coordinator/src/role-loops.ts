@@ -1,7 +1,14 @@
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
 import { prisma } from '@hive/db';
-import { Blackboard, BoardView, collapseFindings, type Challenge, type Hypothesis } from '@hive/swarm';
+import {
+  Blackboard,
+  BoardView,
+  collapseFindings,
+  type Challenge,
+  type Finding,
+  type Hypothesis,
+} from '@hive/swarm';
 import { analyze } from './analyze.js';
 import { challenge } from './challenge.js';
 import { env } from './env.js';
@@ -26,7 +33,15 @@ export async function runAnalystLoop(
   await board.ensureGroup('analyst');
   const view = new BoardView(board);
   let lastCallAt = 0;
-  let pending = false;
+  // Cold start: analyse whatever is already on the board once, before waiting
+  // for new evidence.
+  //
+  // The consumer group only delivers entries it has not seen, so a mission that
+  // arrives in a burst and then goes quiet — a feed whose upstream stops
+  // changing, which dedup then correctly refuses to re-post — would have its
+  // entire body of evidence pass by during startup and never be reconsidered.
+  // Every later run is delta-driven; this is the one pass over the whole board.
+  let pending = true;
 
   while (!signal.aborted) {
     const batch = await board.read('analyst', ['finding'], { count: 64, blockMs: 5_000 });
@@ -47,7 +62,14 @@ export async function runAnalystLoop(
     // observation five times will cite five ids for what is one signal, and
     // the independence score would then be counting duplicates.
     const distinct = collapseFindings(view.state.findings);
-    const recent = distinct.slice(-env.ANALYST_BATCH);
+    // Sample evenly across sources rather than taking the most recent N.
+    //
+    // A busy feed drowns a quiet one: with 41 findings from one book and 10
+    // from another, the tail of the list is almost entirely the first, and an
+    // analyst that never sees the second book cannot possibly corroborate
+    // across them — which is the only kind of claim this system acts on. Taking
+    // a round-robin slice guarantees every live source is represented.
+    const recent = sampleAcrossSources(distinct, env.ANALYST_BATCH);
     if (recent.length === 0) { pending = false; continue; }
 
     pending = false;
@@ -161,6 +183,34 @@ export async function runAdversaryLoop(
       'adversary: objections',
     );
   }
+}
+
+/**
+ * Round-robin across sourceId, newest first within each source, until the
+ * budget is spent. Every source that has anything gets a slot before any source
+ * gets a second one.
+ */
+function sampleAcrossSources(findings: Finding[], budget: number): Finding[] {
+  const bySource = new Map<string, Finding[]>();
+  for (const f of findings) {
+    const list = bySource.get(f.provenance.sourceId) ?? [];
+    list.push(f);
+    bySource.set(f.provenance.sourceId, list);
+  }
+  // Newest first, so each source contributes its freshest evidence.
+  for (const list of bySource.values()) list.reverse();
+
+  const out: Finding[] = [];
+  const queues = [...bySource.values()];
+  let round = 0;
+  while (out.length < budget && queues.some((q) => q.length > round)) {
+    for (const q of queues) {
+      if (out.length >= budget) break;
+      if (q.length > round) out.push(q[round]);
+    }
+    round += 1;
+  }
+  return out;
 }
 
 /**
