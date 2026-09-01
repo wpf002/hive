@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { BeeMark } from '@/components/BeeMark';
 import { useMissionStream } from '@/components/swarm/useMissionStream';
 import { FlowField } from '@/components/swarm/FlowField';
 import type { MissionListItem, ProposalView } from '@/lib/mission-types';
@@ -113,7 +114,7 @@ function Prompt({
   return (
     <div className="shrink-0 border-b border-hive-border/60 px-4 py-3">
       <div className="mx-auto flex max-w-3xl items-center gap-2">
-        <span className="select-none font-mono text-sm text-honey-500">🐝</span>
+        <BeeMark size={20} className="shrink-0" />
         {open ? (
           <>
             <input
@@ -175,7 +176,7 @@ function Field({ missionId }: { missionId: string }) {
   return (
     <>
       {/* one line of numbers, not a dashboard */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 font-mono text-[11px] text-hive-subtle">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-hive-subtle">
         <span className="truncate text-hive-text">{snapshot.name}</span>
         <span>
           {snapshot.agents.filter((a) => a.role === 'gatherer').length} feeds
@@ -200,6 +201,7 @@ function Field({ missionId }: { missionId: string }) {
           agents={snapshot.agents}
           claims={snapshot.claims}
           findings={snapshot.findings}
+          findingsPerMin={snapshot.findingsPerMin}
           decisionPulse={snapshot.lastDecisionAt ? Date.parse(snapshot.lastDecisionAt) : null}
         />
       </div>

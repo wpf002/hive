@@ -65,16 +65,19 @@ export function FlowField({
   agents,
   claims,
   findings,
+  findingsPerMin,
   decisionPulse,
 }: {
   agents: AgentView[];
   claims: ClaimView[];
   findings: number;
+  /** Live arrival rate. The field's energy tracks this, not lifetime totals. */
+  findingsPerMin: number;
   decisionPulse: number | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dataRef = useRef({ agents, claims, findings });
-  dataRef.current = { agents, claims, findings };
+  const dataRef = useRef({ agents, claims, findings, findingsPerMin });
+  dataRef.current = { agents, claims, findings, findingsPerMin };
   const flareRef = useRef(0);
 
   useEffect(() => {
@@ -169,14 +172,22 @@ export function FlowField({
         raf = requestAnimationFrame(draw);
         return;
       }
-      const { agents: liveAgents, claims: liveClaims, findings: liveFindings } = dataRef.current;
+      const {
+        agents: liveAgents,
+        claims: liveClaims,
+        findings: liveFindings,
+        findingsPerMin: liveRate,
+      } = dataRef.current;
 
       // --- sources -------------------------------------------------------
       const gatherers = liveAgents.filter((a) => a.role === 'gatherer' && a.sourceId);
+      // Weight by RECENT contribution, not lifetime. A feed that delivered a
+      // thousand findings yesterday and nothing since should look quiet, which
+      // is the whole point of watching the picture rather than a table.
       const bySource = new Map<string, { total: number; stalled: boolean }>();
       for (const g of gatherers) {
         const e = bySource.get(g.sourceId!) ?? { total: 0, stalled: false };
-        e.total += Math.max(1, g.contributions);
+        e.total += g.recentContributions;
         if (g.state === 'stalled') e.stalled = true;
         bySource.set(g.sourceId!, e);
       }
@@ -185,19 +196,26 @@ export function FlowField({
         sourceId,
         x: w * 0.06 + (i % 2) * w * 0.03,
         y: ((i + 1) / (srcIds.length + 1)) * h,
-        weight: bySource.get(sourceId)!.total,
+        // Floor of 0.15 so a silent feed still renders a thin thread rather
+        // than vanishing — absent and idle must not look identical.
+        weight: Math.max(0.15, bySource.get(sourceId)!.total),
         stalled: bySource.get(sourceId)!.stalled,
       }));
 
       // Comb centre — where evidence is heading.
       const combX = w * 0.68;
       const combY = h * 0.5;
+      const combR = Math.max(10, Math.min(26, Math.min(h / 15, w / 40)));
 
       // --- particle population scales with real throughput ---------------
       const totalWeight = patches.reduce((s, p) => s + p.weight, 0) || 1;
-      const want = patches.length === 0
-        ? 0
-        : Math.min(MAX_PARTICLES, Math.round(PARTICLES_PER_SOURCE * patches.length * (1 + Math.log10(1 + liveFindings))));
+      // Energy = live arrival rate, with lifetime findings only as a floor so a
+      // mission that has done real work never renders as empty black.
+      const energy = 1 + Math.log10(1 + liveRate * 12) * 1.6 + Math.log10(1 + liveFindings) * 0.5;
+      const want =
+        patches.length === 0
+          ? 0
+          : Math.min(MAX_PARTICLES, Math.round(PARTICLES_PER_SOURCE * patches.length * energy));
       if (particles.length < want) {
         for (let i = particles.length; i < want; i++) {
           // Distribute across sources proportionally to their contribution.
@@ -256,7 +274,10 @@ export function FlowField({
         if (p.y < -10) { p.y += h + 20; p.py = p.y; }
         else if (p.y > h + 10) { p.y -= h + 20; p.py = p.y; }
 
-        if (p.life >= 1 || dist < 10 || p.x < -30 || p.x > w + 30) {
+        // Capture on arrival. Letting strands pass the comb leaves them
+        // oscillating about its latitude, which stacks into a bright horizontal
+        // bar — an artifact of the steering, not a signal about anything.
+        if (p.life >= 1 || dist < combR * 1.35 || p.x > combX + combR || p.x < -30) {
           respawn(p, patches, t);
           continue;
         }
@@ -276,13 +297,8 @@ export function FlowField({
       drawComb(ctx, liveClaims, combX, combY, w, h, flareRef.current);
       flareRef.current = Math.max(0, flareRef.current - 0.01);
 
-      // --- source labels --------------------------------------------------
-      ctx.font = '10px ui-monospace, monospace';
-      ctx.textAlign = 'left';
-      for (const p of patches) {
-        ctx.fillStyle = p.stalled ? 'rgba(196,69,58,0.9)' : 'rgba(161,161,170,0.75)';
-        ctx.fillText(p.sourceId, p.x + 12, p.y + 3);
-      }
+      // --- source tags ----------------------------------------------------
+      for (const p of patches) drawSourceTag(ctx, p);
 
       raf = requestAnimationFrame(draw);
     };
@@ -363,6 +379,79 @@ function drawComb(
   hexPath(ctx, cx, cy, r * (0.55 + flare * 0.45));
   ctx.stroke();
   ctx.lineWidth = 1;
+}
+
+/**
+ * A source annotation: hex marker at the origin, leader line, plated label.
+ *
+ * Bare text was unreadable — the strands it sits among are the brightest thing
+ * on screen, so a light-grey glyph competes with them and loses. The plate is
+ * what makes it legible; the hex ties the name to the point it describes rather
+ * than leaving it floating; and the throughput count belongs here because the
+ * only question you ask of a source is whether it is still carrying anything.
+ */
+function drawSourceTag(ctx: CanvasRenderingContext2D, p: Patch): void {
+  const accent = p.stalled ? '196,69,58' : '255,193,7';
+  const quiet = p.weight <= 1;
+  const label = p.sourceId.toUpperCase();
+  const count = p.weight > 999 ? '999+' : String(p.weight);
+
+  ctx.font = '600 9px ui-monospace, "JetBrains Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+
+  const padX = 6;
+  const gap = 6;
+  const labelW = ctx.measureText(label).width;
+  const countW = ctx.measureText(count).width;
+  const plateW = padX + labelW + gap + countW + padX;
+  const plateH = 16;
+  const markerR = 5;
+  const leader = 9;
+  const x0 = p.x + markerR + leader;
+  const y0 = p.y - plateH / 2;
+
+  // Leader from the marker to the plate.
+  ctx.strokeStyle = `rgba(${accent},0.45)`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(p.x + markerR, p.y);
+  ctx.lineTo(x0, p.y);
+  ctx.stroke();
+
+  // Backing plate — near-opaque so the label survives a bright bundle behind it.
+  ctx.fillStyle = 'rgba(7,7,10,0.82)';
+  ctx.fillRect(x0, y0, plateW, plateH);
+  ctx.strokeStyle = `rgba(${accent},${quiet ? 0.22 : 0.5})`;
+  ctx.strokeRect(x0 + 0.5, y0 + 0.5, plateW - 1, plateH - 1);
+
+  // Name, then throughput right-aligned inside the plate.
+  ctx.fillStyle = p.stalled
+    ? `rgba(${accent},0.95)`
+    : quiet
+      ? 'rgba(161,161,170,0.75)'
+      : 'rgba(253,230,138,0.95)';
+  ctx.fillText(label, x0 + padX, p.y + 0.5);
+
+  ctx.fillStyle = p.stalled ? `rgba(${accent},0.95)` : `rgba(${accent},${quiet ? 0.45 : 0.9})`;
+  ctx.fillText(count, x0 + padX + labelW + gap, p.y + 0.5);
+
+  // Hex marker at the origin, filled so it reads as a node rather than an outline.
+  hexPath(ctx, p.x, p.y, markerR);
+  ctx.fillStyle = 'rgba(7,7,10,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${accent},${quiet ? 0.5 : 0.95})`;
+  ctx.lineWidth = 1.25;
+  ctx.stroke();
+  if (!quiet && !p.stalled) {
+    // A lit core means this source is actually contributing.
+    hexPath(ctx, p.x, p.y, markerR * 0.42);
+    ctx.fillStyle = `rgba(${accent},0.9)`;
+    ctx.fill();
+  }
+
+  ctx.lineWidth = 1;
+  ctx.textBaseline = 'alphabetic';
 }
 
 function hexPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {

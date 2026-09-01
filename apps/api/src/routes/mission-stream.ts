@@ -43,6 +43,10 @@ export interface AgentView {
   state: string;
   /** Findings this agent has contributed, for the forage trails in the UI. */
   contributions: number;
+  /** Findings from this agent's source in the last few minutes. Drives how much
+   *  of the field a source occupies, so the picture tracks live work rather
+   *  than lifetime totals — an exhausted feed should go dark. */
+  recentContributions: number;
 }
 
 export interface MissionSnapshot {
@@ -78,6 +82,8 @@ export interface MissionSnapshot {
    * run must say so — an empty field with no explanation reads as "working".
    */
   stalled: { pools: string[]; queuedJobs: number };
+  /** Findings per minute over the recent window — the field's overall energy. */
+  findingsPerMin: number;
 }
 
 async function buildSnapshot(missionId: string, view: BoardView): Promise<MissionSnapshot | null> {
@@ -119,7 +125,21 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     contributions.set(f.agentId, (contributions.get(f.agentId) ?? 0) + 1);
   }
 
+
   const now = Date.now();
+  // Recent activity per source, from the durable record rather than the board:
+  // the board is a rolling window, so counting it would conflate "quiet now"
+  // with "trimmed away".
+  const ACTIVITY_WINDOW_MIN = 5;
+  const since = new Date(now - ACTIVITY_WINDOW_MIN * 60_000);
+  const recentRows = await prisma.finding.groupBy({
+    by: ['sourceId'],
+    where: { missionId, createdAt: { gte: since } },
+    _count: { _all: true },
+  });
+  const recentBySource = new Map(recentRows.map((r) => [r.sourceId, r._count._all]));
+  const findingsPerMin =
+    recentRows.reduce((sum, r) => sum + r._count._all, 0) / ACTIVITY_WINDOW_MIN;
   const agents: AgentView[] = mission.agents.map((a) => {
     const latest = a.bot.jobs[0];
     const age = latest ? now - latest.createdAt.getTime() : Infinity;
@@ -141,6 +161,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
       sourceId: a.sourceId,
       state,
       contributions: contributions.get(a.botId) ?? 0,
+      recentContributions: a.sourceId ? (recentBySource.get(a.sourceId) ?? 0) : 0,
     };
   });
 
@@ -214,6 +235,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     },
     lastDecisionAt: mission.lastDecisionAt?.toISOString() ?? null,
     stalled: { pools: stalledPools, queuedJobs },
+    findingsPerMin: Number(findingsPerMin.toFixed(2)),
   };
 }
 

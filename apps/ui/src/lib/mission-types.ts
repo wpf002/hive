@@ -23,6 +23,8 @@ export interface AgentView {
   /** running | idle | stalled | disabled */
   state: string;
   contributions: number;
+  /** Findings from this source in the last few minutes. */
+  recentContributions: number;
 }
 
 export interface ClaimView {
@@ -64,6 +66,8 @@ export interface MissionSnapshot {
   lastDecisionAt: string | null;
   /** Pools with no live worker, and jobs stuck queued because of it. */
   stalled: { pools: string[]; queuedJobs: number };
+  /** Findings per minute over the recent window. */
+  findingsPerMin: number;
 }
 
 export interface MissionListItem {

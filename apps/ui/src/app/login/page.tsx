@@ -54,7 +54,7 @@ function LoginForm() {
             />
           </svg>
           <h1 className="font-mono text-2xl font-bold tracking-widest text-honey-500">HIVE</h1>
-          <p className="font-mono text-xs text-hive-subtle">Sign in to your account</p>
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-hive-subtle">Sign in to your account</p>
         </div>
         {justReset && (
           <div className="rounded border border-honey-500/30 bg-honey-500/10 p-2 font-mono text-xs text-hive-text">
