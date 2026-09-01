@@ -104,32 +104,76 @@ async function triggerRun(botId: string): Promise<{ ok: boolean; status: number;
   return { ok: r.ok, status: r.status, body: text.slice(0, 500) };
 }
 
-async function tick(): Promise<void> {
-  const now = new Date();
-  for (const s of cache) {
-    if (!s.enabled) continue;
-    if (s.nextRunAt && s.nextRunAt > now) continue;
-    try {
-      const res = await triggerRun(s.botId);
-      const lastRunAt = new Date();
-      const nextRunAt = computeNext(s.cron, lastRunAt);
-      // updateMany so a concurrently-deleted schedule is a no-op, not a P2025.
-      await prisma.schedule.updateMany({
-        where: { id: s.id },
-        data: { lastRunAt, nextRunAt },
-      });
-      s.nextRunAt = nextRunAt;
-      if (res.ok) {
-        app.log.info({ scheduleId: s.id, botId: s.botId, nextRunAt }, 'schedule_fired');
-      } else {
-        app.log.warn(
-          { scheduleId: s.id, botId: s.botId, status: res.status, body: res.body },
-          'schedule_fire_failed',
-        );
-      }
-    } catch (err) {
-      app.log.error({ err, scheduleId: s.id }, 'schedule_tick_error');
+/**
+ * Firing due schedules a few at a time rather than one after another.
+ *
+ * A trigger is a ~5ms HTTP round trip, which is invisible at ten schedules and
+ * the whole ceiling at a few thousand: strictly sequential, a fleet large
+ * enough takes longer to fire than the interval between ticks, and every bot
+ * drifts late by however long the queue ahead of it took. Bounded rather than
+ * unbounded because the far end is the API, and a thousand simultaneous run
+ * requests would move the pileup rather than remove it.
+ */
+const FIRE_CONCURRENCY = 16;
+
+/** Guards against a slow tick overlapping the next one and double-firing. */
+let ticking = false;
+
+async function fireSchedule(s: CachedSchedule): Promise<void> {
+  try {
+    const res = await triggerRun(s.botId);
+    const lastRunAt = new Date();
+    const nextRunAt = computeNext(s.cron, lastRunAt);
+    // updateMany so a concurrently-deleted schedule is a no-op, not a P2025.
+    await prisma.schedule.updateMany({
+      where: { id: s.id },
+      data: { lastRunAt, nextRunAt },
+    });
+    s.nextRunAt = nextRunAt;
+    if (res.ok) {
+      app.log.info({ scheduleId: s.id, botId: s.botId, nextRunAt }, 'schedule_fired');
+    } else {
+      app.log.warn(
+        { scheduleId: s.id, botId: s.botId, status: res.status, body: res.body },
+        'schedule_fire_failed',
+      );
     }
+  } catch (err) {
+    app.log.error({ err, scheduleId: s.id }, 'schedule_tick_error');
+  }
+}
+
+async function tick(): Promise<void> {
+  if (ticking) {
+    app.log.warn('schedule_tick_overrun');
+    return;
+  }
+  ticking = true;
+  const startedAt = Date.now();
+  try {
+    const now = new Date();
+    const due = cache.filter((s) => s.enabled && !(s.nextRunAt && s.nextRunAt > now));
+    if (due.length === 0) return;
+
+    // Claim the next due schedule from a shared cursor: workers that finish
+    // early pick up more instead of waiting on a slow neighbour's batch.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(FIRE_CONCURRENCY, due.length) }, async () => {
+        while (next < due.length) {
+          await fireSchedule(due[next++]);
+        }
+      }),
+    );
+    const ms = Date.now() - startedAt;
+    // Loud when a tick eats most of its own interval — that is the signal the
+    // fleet has outgrown this scheduler, and it should not have to be inferred
+    // from bots quietly running late.
+    if (ms > TICK_MS * 0.5) {
+      app.log.warn({ fired: due.length, ms, tickMs: TICK_MS }, 'schedule_tick_slow');
+    }
+  } finally {
+    ticking = false;
   }
 }
 

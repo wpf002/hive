@@ -9,6 +9,7 @@ import { encryptBotConfig } from '../lib/secrets.js';
 import { coerceConfigToSchema } from '../lib/schema-coerce.js';
 import { writeAuditLog } from '../lib/audit.js';
 import { staggerCron } from '../lib/cron-stagger.js';
+import { measurePoolCapacity, maxBotsForPool, cronMinutes } from '../lib/pool-capacity.js';
 
 /**
  * Plain English in, a running swarm out.
@@ -302,21 +303,48 @@ export async function missionComposeRoutes(app: FastifyInstance) {
       });
     }
 
-    // Trim SUBJECTS, never sources, when the grid exceeds the cap.
+    // How wide this can actually get, decided per pool from measured throughput
+    // rather than from one number for every kind of work.
     //
-    // Dropping a source costs corroboration on every subject at once — the
-    // mission would still be wide but nothing in it could clear a two-source
-    // bar. Dropping a subject costs only that subject. So the cap narrows
-    // coverage and never weakens evidence.
-    const perSource = Math.floor(env.MISSION_MAX_GATHERERS / sources.length);
+    // Each source contributes one bot per subject on its own cron, so the
+    // subject count a source can support is whatever its pool can carry. The
+    // mission takes the smallest of those: every source must cover every
+    // subject, or the subjects the slow source cannot reach would be
+    // corroborated by fewer feeds than the mission claims.
+    const capacity = await measurePoolCapacity();
+    let limitingPool: { pool: string; subjects: number } | null = null;
+    let perSource = env.MISSION_MAX_GATHERERS;
+    for (const src of sources) {
+      const pool = capacity.get(src.template.poolType);
+      const allowed = pool
+        ? maxBotsForPool(pool.jobsPerMinute, cronMinutes(src.cron))
+        : env.MISSION_MAX_GATHERERS;
+      if (allowed < perSource) {
+        perSource = allowed;
+        limitingPool = { pool: src.template.poolType, subjects: allowed };
+      }
+    }
+    // The absolute backstop, independent of throughput: a mission is also a
+    // pile of rows, cron entries and scheduler work.
+    perSource = Math.min(perSource, Math.floor(env.MISSION_MAX_GATHERERS / sources.length));
+
     if (subjects.length > 0 && perSource < 1) {
       return reply.code(422).send({
         error: {
-          code: 'too_many_sources',
-          message: `${sources.length} sources exceeds the ${env.MISSION_MAX_GATHERERS}-bot cap before any subject is added.`,
+          code: 'no_capacity',
+          message: limitingPool
+            ? `The ${limitingPool.pool} pool cannot carry another bot at this rate. Start more workers in that pool or use a slower cron.`
+            : `${sources.length} sources exceeds the ${env.MISSION_MAX_GATHERERS}-bot cap before any subject is added.`,
         },
       });
     }
+
+    // Trim SUBJECTS, never sources.
+    //
+    // Dropping a source costs corroboration on every subject at once — the
+    // mission would still be wide but nothing in it could clear a two-source
+    // bar. Dropping a subject costs only that subject. So the ceiling narrows
+    // coverage and never weakens evidence.
     const droppedSubjects = Math.max(0, subjects.length - perSource);
     const usedSubjects = subjects.length > 0 ? subjects.slice(0, perSource) : [''];
 
@@ -432,6 +460,18 @@ export async function missionComposeRoutes(app: FastifyInstance) {
       // Silence here would read as "everything you asked for is running".
       skippedSources: skipped,
       droppedSubjects,
+      // Named so a trimmed mission points at the thing to fix — more workers in
+      // that pool, or a slower cron — instead of just being quietly narrower
+      // than what was asked for.
+      ...(droppedSubjects > 0 && limitingPool
+        ? {
+            limitedBy: {
+              pool: limitingPool.pool,
+              maxSubjects: limitingPool.subjects,
+              reason: `the ${limitingPool.pool} pool sustains ${limitingPool.subjects} subjects at this cron`,
+            },
+          }
+        : {}),
     });
   });
 }

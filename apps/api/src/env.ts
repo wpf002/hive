@@ -56,7 +56,11 @@ const Env = z.object({
   // schedules. The cap is a guard against a one-line request quietly creating
   // more scheduled work than the worker pools can serve; raise it once the
   // pools are sized for it.
-  MISSION_MAX_GATHERERS: z.coerce.number().int().positive().default(200),
+  // Raised from 200 now that width is bounded by measured pool throughput
+  // rather than by this number. This is the backstop for the things throughput
+  // does not describe — rows, cron entries, and the scheduler's own tick, which
+  // fires due schedules at about 5ms each and so has room for thousands.
+  MISSION_MAX_GATHERERS: z.coerce.number().int().positive().default(2000),
   // Daily digest: where the once-a-day bot-effectiveness report is emailed.
   // When unset, the report still generates (and logs) but isn't sent. Real
   // delivery also needs HIVE_EMAIL_PROVIDER=resend + RESEND_* (below).
