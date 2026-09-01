@@ -279,14 +279,18 @@ export function FlowField({
         const toComb = Math.atan2(combY - p.y, combX - p.x);
         const dist = Math.hypot(combX - p.x, combY - p.y);
         const flow = angleAt(p.x, p.y, t);
-        // Drift only applies on the approach side. Past the comb it would pull
-        // strands back toward it, and they would oscillate about it forever
-        // instead of carrying on — which is both an artifact and the reason the
-        // far side of the field used to stay empty.
-        const approaching = p.x < combX;
-        const drift = approaching
-          ? Math.min(0.5, 0.12 + (1 - Math.min(1, dist / (w * 0.8))) * 0.5)
-          : 0;
+        // Drift falls away past the comb rather than switching off at it.
+        //
+        // A hard `p.x < combX` test makes the steering discontinuous along one
+        // vertical line: strands crossing it change heading in a single frame,
+        // and thousands of them doing that at the same x reads as a seam down
+        // the middle of the field. Easing the gate over a band spreads the
+        // transition out so there is no line to see. Past the band drift is
+        // still zero, so strands carry on instead of oscillating about the comb.
+        const past = (p.x - combX) / (w * 0.22);
+        const gate = past <= 0 ? 1 : Math.max(0, 1 - past * past);
+        const drift =
+          gate * Math.min(0.5, 0.12 + (1 - Math.min(1, dist / (w * 0.8))) * 0.5);
         const heading = flow * (1 - drift) + toComb * drift;
 
         const sp = reduceMotion ? 0 : p.speed;
