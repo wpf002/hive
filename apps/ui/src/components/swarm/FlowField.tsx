@@ -91,6 +91,10 @@ export function FlowField({
     if (!ctx) return;
 
     let raf = 0;
+    const probeMode =
+      process.env.NODE_ENV !== 'production' &&
+      typeof location !== 'undefined' &&
+      new URLSearchParams(location.search).has('probe');
     let w = 0;
     let h = 0;
     let dpr = 1;
@@ -181,7 +185,7 @@ export function FlowField({
       // into a 0x0 field puts every particle at the origin, where they sit
       // until they expire — so wait for a real size instead.
       if (w < 8 || h < 8) {
-        raf = requestAnimationFrame(draw);
+        if (!probeMode) raf = requestAnimationFrame(draw);
         return;
       }
       const {
@@ -328,11 +332,38 @@ export function FlowField({
       // --- source tags ----------------------------------------------------
       for (const p of patches) drawSourceTag(ctx, p);
 
-      raf = requestAnimationFrame(draw);
+      if (!probeMode) raf = requestAnimationFrame(draw);
     };
 
-    raf = requestAnimationFrame(draw);
+    /**
+     * Dev-only probe. Browsers pause requestAnimationFrame in a hidden
+     * document, and an automated pane is always hidden — so the field cannot be
+     * inspected there at all, which is exactly how a bug in it survived several
+     * rounds of "fixed". With `?probe=1` the loop is driven by a timer instead,
+     * which runs regardless of visibility, so the canvas can be rendered and
+     * its pixels sampled programmatically.
+     *
+     * Guarded on NODE_ENV as well as the query param: it must be impossible to
+     * turn a production tab into a battery drain from the URL bar.
+     */
+    const probe =
+      process.env.NODE_ENV !== 'production' &&
+      typeof location !== 'undefined' &&
+      new URLSearchParams(location.search).has('probe');
+
+    let probeTimer: ReturnType<typeof setInterval> | null = null;
+    if (probe) {
+      let t0 = 0;
+      probeTimer = setInterval(() => {
+        t0 += 16;
+        draw(t0);
+      }, 16);
+    } else {
+      raf = requestAnimationFrame(draw);
+    }
+
     return () => {
+      if (probeTimer) clearInterval(probeTimer);
       cancelAnimationFrame(raf);
       ro.disconnect();
       particles = [];
