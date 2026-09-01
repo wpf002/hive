@@ -62,6 +62,8 @@ export interface MissionSnapshot {
   proposals: ProposalView[];
   cost: { todayCents: number; runRateCentsPerHour: number };
   lastDecisionAt: string | null;
+  /** Pools with no live worker, and jobs stuck queued because of it. */
+  stalled: { pools: string[]; queuedJobs: number };
 }
 
 export interface MissionListItem {

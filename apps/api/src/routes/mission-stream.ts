@@ -72,6 +72,12 @@ export interface MissionSnapshot {
   }[];
   cost: { todayCents: number; runRateCentsPerHour: number };
   lastDecisionAt: string | null;
+  /**
+   * Pools this mission's gatherers need that have no worker online, plus how
+   * many of its jobs are stuck queued as a result. A mission whose feeds cannot
+   * run must say so — an empty field with no explanation reads as "working".
+   */
+  stalled: { pools: string[]; queuedJobs: number };
 }
 
 async function buildSnapshot(missionId: string, view: BoardView): Promise<MissionSnapshot | null> {
@@ -159,6 +165,24 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     }),
   ]);
 
+  // Which pools this mission needs, and which of those are actually running.
+  const neededPools = new Set(mission.agents.map((a) => a.bot.template.poolType));
+  const live = await prisma.worker.findMany({
+    where: { lastSeenAt: { gt: new Date(now - 30_000) }, status: { not: 'offline' } },
+    select: { poolType: true },
+    distinct: ['poolType'],
+  });
+  const livePools = new Set(live.map((w) => w.poolType));
+  const stalledPools = [...neededPools].filter((p) => !livePools.has(p));
+  const queuedJobs = stalledPools.length
+    ? await prisma.job.count({
+        where: {
+          status: 'queued',
+          bot: { missionAgents: { some: { missionId } } },
+        },
+      })
+    : 0;
+
   return {
     missionId,
     name: mission.name,
@@ -189,6 +213,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
       runRateCentsPerHour: lastHour._sum.costCents ?? 0,
     },
     lastDecisionAt: mission.lastDecisionAt?.toISOString() ?? null,
+    stalled: { pools: stalledPools, queuedJobs },
   };
 }
 

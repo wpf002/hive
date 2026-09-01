@@ -187,6 +187,11 @@ function Field({ missionId }: { missionId: string }) {
           <b className="text-honey-500">{corroborated.length}</b> corroborated
         </span>
         {!connected && <span className="text-burnt-500">reconnecting…</span>}
+        {snapshot.stalled.pools.length > 0 && (
+          <span className="text-red-500">
+            {snapshot.stalled.pools.join(', ')} worker offline
+          </span>
+        )}
         <span className="ml-auto">${(snapshot.cost.todayCents / 100).toFixed(2)} today</span>
       </div>
 
@@ -216,6 +221,18 @@ function Field({ missionId }: { missionId: string }) {
                 {top.independentSources} src
               </span>
               <span className={cn(top.refuted && 'text-hive-subtle line-through')}>{top.claim}</span>
+            </p>
+          ) : snapshot.stalled.pools.length > 0 ? (
+            <p className="font-mono text-xs leading-relaxed text-red-400">
+              Nothing is running these feeds. The{' '}
+              <b>{snapshot.stalled.pools.join(' and ')}</b> worker
+              {snapshot.stalled.pools.length > 1 ? 's are' : ' is'} offline
+              {snapshot.stalled.queuedJobs > 0
+                ? `, so ${snapshot.stalled.queuedJobs} job${snapshot.stalled.queuedJobs > 1 ? 's are' : ' is'} stuck waiting.`
+                : '.'}{' '}
+              <span className="text-hive-subtle">
+                Start it with: pnpm --filter @hive/worker-{snapshot.stalled.pools[0].replace('_', '-')} dev
+              </span>
             </p>
           ) : (
             <p className="font-mono text-xs text-hive-subtle">

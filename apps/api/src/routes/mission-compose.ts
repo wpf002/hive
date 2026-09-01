@@ -100,9 +100,38 @@ export async function missionComposeRoutes(app: FastifyInstance) {
     }
     const body = Body.parse(req.body);
 
-    const templates = await prisma.botTemplate.findMany({
-      orderBy: { name: 'asc' },
+    // Only offer templates whose pool has a worker online right now.
+    //
+    // Without this the composer will happily pick a pool nobody is running,
+    // every job sits `queued` forever, and the console shows a full field with
+    // zero findings and no explanation — which is the worst possible failure,
+    // because it looks like it is working.
+    const ONLINE_WINDOW_MS = 30_000;
+    const liveWorkers = await prisma.worker.findMany({
+      where: { lastSeenAt: { gt: new Date(Date.now() - ONLINE_WINDOW_MS) }, status: { not: 'offline' } },
+      select: { poolType: true },
+      distinct: ['poolType'],
     });
+    const onlinePools = new Set(liveWorkers.map((w) => w.poolType));
+    if (onlinePools.size === 0) {
+      return reply.code(503).send({
+        error: {
+          code: 'no_workers',
+          message: 'No worker pools are online, so nothing could actually run. Start the workers and try again.',
+        },
+      });
+    }
+
+    const allTemplates = await prisma.botTemplate.findMany({ orderBy: { name: 'asc' } });
+    const templates = allTemplates.filter((t) => onlinePools.has(t.poolType));
+    if (templates.length === 0) {
+      return reply.code(503).send({
+        error: {
+          code: 'no_usable_templates',
+          message: `Online pools (${[...onlinePools].join(', ')}) have no templates to work with.`,
+        },
+      });
+    }
     const catalog = templates.map((t) => ({
       id: t.id,
       name: t.name,
@@ -190,8 +219,7 @@ export async function missionComposeRoutes(app: FastifyInstance) {
       return reply.code(422).send({
         error: {
           code: 'no_gatherers',
-          message:
-            'No usable data source matched that request. Try naming the feed or site you want watched.',
+          message: `Nothing that is currently running can watch that. Live pools: ${[...onlinePools].join(', ')}. Try naming a site or feed one of those can reach.`,
         },
       });
     }
