@@ -19,6 +19,21 @@ import type { MissionListItem, ProposalView } from '@/lib/mission-types';
  * Chrome is deliberately thin. One line of numbers, and approvals only when
  * there is something to approve.
  */
+/**
+ * Shared button feel.
+ *
+ * `transition-colors` alone is not enough — without an active state a click has
+ * no acknowledgement at all between press and whatever the server eventually
+ * says, which is what makes the controls feel unresponsive rather than slow.
+ * The scale nudge fires on press, so the button answers the finger immediately
+ * and the network result arrives into an already-acknowledged interaction.
+ */
+const BTN =
+  'rounded border font-mono uppercase tracking-[0.1em] transition-all duration-150 ' +
+  'active:scale-[0.96] cursor-pointer select-none ' +
+  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-honey-500/70 ' +
+  'disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100';
+
 export function SwarmConsole() {
   const [missionId, setMissionId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -132,7 +147,10 @@ function Prompt({
             <button
               onClick={onSubmit}
               disabled={busy || !value.trim()}
-              className="shrink-0 rounded border border-honey-500 px-3 py-1 font-mono text-xs uppercase tracking-[0.12em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-30"
+              className={cn(
+                BTN,
+                'shrink-0 border-honey-500 px-3 py-1 text-xs text-honey-500 hover:bg-honey-500 hover:text-hive-bg',
+              )}
             >
               {busy ? 'composing…' : 'go'}
             </button>
@@ -140,7 +158,7 @@ function Prompt({
         ) : (
           <button
             onClick={onOpen}
-            className="flex-1 text-left font-mono text-sm uppercase tracking-[0.08em] text-hive-subtle/70 hover:text-hive-subtle"
+            className="flex-1 cursor-pointer text-left font-mono text-sm uppercase tracking-[0.08em] text-hive-subtle/70 transition-colors duration-150 hover:text-hive-subtle"
           >
             Watch something else…
           </button>
@@ -161,14 +179,28 @@ function Prompt({
 function Field({ missionId }: { missionId: string }) {
   const { snapshot, connected } = useMissionStream(missionId);
   const [pausing, setPausing] = useState(false);
+  // Shown instead of the server's status until the next snapshot confirms it.
+  // Without this a click waits on a round-trip *and* the next SSE tick before
+  // anything changes — up to a second of a button that looks broken.
+  const [optimisticStatus, setOptimisticStatus] = useState<string | null>(null);
+
+  // Drop the override once the server reports the same thing, so the button
+  // goes back to reflecting reality rather than our guess about it.
+  const serverStatus = snapshot?.status;
+  useEffect(() => {
+    if (optimisticStatus && serverStatus === optimisticStatus) setOptimisticStatus(null);
+  }, [serverStatus, optimisticStatus]);
 
   // Stopping is the one control that always has to be one click away. Every
   // running mission polls its feeds and wakes a model on each genuine board
   // change, so a mission you have stopped watching is still spending.
   async function setStatus(status: 'running' | 'paused') {
     setPausing(true);
+    setOptimisticStatus(status);
     try {
       await api.patch(`/api/missions/${missionId}`, { status });
+    } catch {
+      setOptimisticStatus(null); // let the real status reassert itself
     } finally {
       setPausing(false);
     }
@@ -182,6 +214,7 @@ function Field({ missionId }: { missionId: string }) {
     );
   }
 
+  const status = optimisticStatus ?? snapshot.status;
   const pending = snapshot.proposals.filter((p) => p.status === 'pending');
   const corroborated = snapshot.claims.filter((c) => c.independentSources >= 2 && !c.refuted);
   const top = corroborated[0] ?? snapshot.claims[0];
@@ -209,11 +242,14 @@ function Field({ missionId }: { missionId: string }) {
         <span className="ml-auto tabular-nums">
           ${(snapshot.cost.todayCents / 100).toFixed(2)} today
         </span>
-        {snapshot.status === 'running' ? (
+        {status === 'running' ? (
           <button
             onClick={() => setStatus('paused')}
             disabled={pausing}
-            className="rounded border border-hive-muted px-2 py-0.5 uppercase tracking-[0.08em] text-hive-subtle hover:border-red-600 hover:text-red-400 disabled:opacity-40"
+            className={cn(
+              BTN,
+              'border-hive-muted px-2 py-0.5 text-[11px] text-hive-subtle hover:border-red-600 hover:text-red-400',
+            )}
             title="Stop the feeds and the model calls"
           >
             {pausing ? '…' : 'stop'}
@@ -222,7 +258,10 @@ function Field({ missionId }: { missionId: string }) {
           <button
             onClick={() => setStatus('running')}
             disabled={pausing}
-            className="rounded border border-honey-500 px-2 py-0.5 uppercase tracking-[0.08em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-40"
+            className={cn(
+              BTN,
+              'border-honey-500 px-2 py-0.5 text-[11px] text-honey-500 hover:bg-honey-500 hover:text-hive-bg',
+            )}
           >
             {pausing ? '…' : 'resume'}
           </button>
@@ -249,15 +288,19 @@ function Field({ missionId }: { missionId: string }) {
             <p className="line-clamp-2 font-mono text-xs leading-relaxed" title={top.claim}>
               <span
                 className={cn(
-                  'mr-2 tabular-nums',
-                  top.independentSources >= 2 ? 'text-honey-500' : 'text-red-500',
+                  'mr-2',
+                  top.refuted
+                    ? 'text-red-500'
+                    : top.independentSources >= 2
+                      ? 'text-honey-500'
+                      : 'text-red-500',
                 )}
               >
-                {top.independentSources} src
+                {corroborationLabel(top.independentSources, top.refuted)}
               </span>
               <span className={cn(top.refuted && 'text-hive-subtle line-through')}>{top.claim}</span>
             </p>
-          ) : snapshot.status !== 'running' ? (
+          ) : status !== 'running' ? (
             <p className="font-mono text-xs text-hive-subtle">
               Stopped. No feeds are polling and no model calls are being made.
             </p>
@@ -282,6 +325,17 @@ function Field({ missionId }: { missionId: string }) {
       </div>
     </>
   );
+}
+
+/**
+ * "2 src" told you nothing unless you already knew the model. The number that
+ * matters is how many independent feeds agree, so say that.
+ */
+function corroborationLabel(sources: number, refuted: boolean): string {
+  if (refuted) return 'Refuted —';
+  if (sources === 0) return 'Unverified —';
+  if (sources === 1) return 'Only 1 source —';
+  return `${sources} sources agree —`;
 }
 
 function Approvals({ missionId, proposals }: { missionId: string; proposals: ProposalView[] }) {
@@ -321,14 +375,20 @@ function Approvals({ missionId, proposals }: { missionId: string; proposals: Pro
         <button
           onClick={() => respond(p.id, 'approve')}
           disabled={busy === p.id}
-          className="rounded border border-honey-500 px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-40"
+          className={cn(
+            BTN,
+            'border-honey-500 px-2.5 py-0.5 text-[11px] text-honey-500 hover:bg-honey-500 hover:text-hive-bg',
+          )}
         >
           {p.action}
         </button>
         <button
           onClick={() => respond(p.id, 'reject')}
           disabled={busy === p.id}
-          className="rounded border border-hive-muted px-2.5 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-hive-subtle hover:border-red-700 hover:text-red-400 disabled:opacity-40"
+          className={cn(
+            BTN,
+            'border-hive-muted px-2.5 py-0.5 text-[11px] text-hive-subtle hover:border-red-700 hover:text-red-400',
+          )}
         >
           no
         </button>
