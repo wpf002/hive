@@ -30,8 +30,8 @@ const BURNT = [255, 107, 26] as const;
 const ALARM = [196, 69, 58] as const;
 
 /** Filaments in flight per unit of source throughput. Tuned for density, capped below. */
-const PARTICLES_PER_SOURCE = 260;
-const MAX_PARTICLES = 6000;
+const PARTICLES_PER_SOURCE = 420;
+const MAX_PARTICLES = 9000;
 /**
  * Fade applied to the previous frame. Lower = longer trails. At 0.028 a strand
  * stays legible for roughly 35 frames, which is what turns moving points into
@@ -138,15 +138,25 @@ export function FlowField({
     const respawn = (p: Particle, patches: Patch[], t: number) => {
       const patch = patches[p.src] ?? patches[0];
       if (!patch) return;
-      // Emit from a small disc around the source so the strand has a visible origin.
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 14;
-      p.x = patch.x + Math.cos(a) * r;
-      p.y = patch.y + Math.sin(a) * r;
+      // Seed across the whole field rather than at a point. Emitting every
+      // strand from three coordinates gives three thin lanes and acres of empty
+      // black; a colony fills its space. The source a strand belongs to is
+      // carried in its colour and in where it enters, not in a single origin.
+      const fromSource = Math.random() < 0.34;
+      if (fromSource) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 26;
+        p.x = patch.x + Math.cos(a) * r;
+        p.y = patch.y + Math.sin(a) * r;
+      } else {
+        // Bias the scatter left-of-comb so the drift still reads as inbound.
+        p.x = Math.random() * w * 0.82;
+        p.y = Math.random() * h;
+      }
       p.px = p.x;
       p.py = p.y;
-      p.life = 0;
-      p.speed = 1.6 + Math.random() * 3.8;
+      p.life = Math.random() * 0.35; // stagger, so the field doesn't pulse in unison
+      p.speed = 1.1 + Math.random() * 2.6;
       p.tint = patch.stalled ? 2 : Math.random() < 0.22 ? 1 : 0;
       void t;
     };
@@ -213,23 +223,23 @@ export function FlowField({
       // --- filaments ------------------------------------------------------
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineWidth = 1;
+      // Additive 1px strokes stack into brightness wherever strands bundle,
+      // which is the glow — no blur pass needed, and it stays honest: bright
+      // means "many strands here", i.e. more evidence moving.
       for (const p of particles) {
         p.px = p.x;
         p.py = p.y;
 
-        // Heading is "toward the comb, perturbed" rather than a free flow field.
-        // A free field spans the full circle, which in a wide, short viewport
-        // throws most strands off the top or bottom within a few dozen frames —
-        // the picture becomes a fringe around each source and empty space in the
-        // middle. Anchoring on the bearing to the comb and adding a bounded
-        // wobble keeps every strand crossing while still letting them braid.
+        // Turbulence plus drift. The field angle dominates, which is what makes
+        // neighbouring strands braid into filaments across the whole frame; a
+        // weaker bearing to the comb keeps the net flow inbound so the picture
+        // still reads as evidence arriving rather than as an idle screensaver.
         const toComb = Math.atan2(combY - p.y, combX - p.x);
         const dist = Math.hypot(combX - p.x, combY - p.y);
-        // Wobble relaxes as the strand nears the comb, so the bundle tightens
-        // into the hive instead of fraying at the destination.
-        const converge = 1 - Math.min(1, dist / (w * 0.75));
-        const wobble = angleAt(p.x, p.y, t) * 0.34 * (1 - converge * 0.8);
-        const heading = toComb + wobble;
+        const flow = angleAt(p.x, p.y, t);
+        // Drift strengthens close in, so strands gather at the comb.
+        const drift = Math.min(0.5, 0.12 + (1 - Math.min(1, dist / (w * 0.8))) * 0.5);
+        const heading = flow * (1 - drift) + toComb * drift;
 
         const sp = reduceMotion ? 0 : p.speed;
         p.x += Math.cos(heading) * sp;
@@ -237,15 +247,22 @@ export function FlowField({
         // Lifetime is tuned against travel distance: a strand must survive long
         // enough to cross the field, or the picture is a fringe around each
         // source and empty space in the middle.
-        p.life += 0.0016 + p.speed * 0.00055;
+        // Long enough to traverse and braid; short enough that the field keeps
+        // turning over as new evidence changes the population.
+        p.life += 0.0011 + p.speed * 0.0004;
 
-        if (p.life >= 1 || dist < 12 || p.x < -20 || p.x > w + 20 || p.y < -20 || p.y > h + 20) {
+        // Wrap vertically rather than respawning: in a wide, short viewport a
+        // hard edge kill empties the top and bottom bands within seconds.
+        if (p.y < -10) { p.y += h + 20; p.py = p.y; }
+        else if (p.y > h + 10) { p.y -= h + 20; p.py = p.y; }
+
+        if (p.life >= 1 || dist < 10 || p.x < -30 || p.x > w + 30) {
           respawn(p, patches, t);
           continue;
         }
 
         // Fade in and out so strands don't pop.
-        const a = Math.sin(p.life * Math.PI) * 0.55;
+        const a = Math.sin(p.life * Math.PI) * 0.75;
         const c = p.tint === 2 ? ALARM : p.tint === 1 ? BURNT : HONEY;
         ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
         ctx.beginPath();
