@@ -7,7 +7,8 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useMe } from '@/lib/useMe';
 import { useMissionStream } from '@/components/swarm/useMissionStream';
-import { HiveSwarm } from '@/components/swarm/HiveSwarm';
+import { FlowField } from '@/components/swarm/FlowField';
+import { PanelRail } from '@/components/swarm/PanelRail';
 import { ClaimBoard } from '@/components/swarm/ClaimBoard';
 import { ProposalQueue } from '@/components/swarm/ProposalQueue';
 
@@ -113,17 +114,26 @@ export default function MissionTerminalPage({ params }: { params: { id: string }
         </span>
       </div>
 
-      {/* swarm field */}
-      <div className="min-h-0 flex-1 bg-hive-bg">
-        <HiveSwarm
+      {/* The field takes the room — it is the instrument, not an illustration.
+          `relative` + an absolutely-positioned canvas is load-bearing: a canvas
+          sized with h-full inside a flex child with no definite height resolves
+          to 0x0, which renders nothing at all. */}
+      <div className="relative min-h-0 flex-1 bg-[#07070a]">
+        <FlowField
           agents={snapshot.agents}
           claims={snapshot.claims}
+          findings={snapshot.findings}
           decisionPulse={decisionPulse}
         />
       </div>
 
+      {/* instrument rail */}
+      <div className="shrink-0 border-t border-hive-border">
+        <PanelRail snap={snapshot} />
+      </div>
+
       {/* board + queue */}
-      <div className="grid h-[32%] min-h-[176px] shrink-0 grid-cols-1 border-t border-hive-border bg-hive-surface lg:grid-cols-3">
+      <div className="grid h-[26%] min-h-[150px] shrink-0 grid-cols-1 border-t border-hive-border bg-hive-surface lg:grid-cols-3">
         <div className="col-span-1 min-h-0 border-hive-border lg:col-span-2 lg:border-r">
           <ClaimBoard claims={snapshot.claims} />
         </div>
