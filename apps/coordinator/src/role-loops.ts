@@ -11,6 +11,7 @@ import {
 } from '@hive/swarm';
 import { analyze } from './analyze.js';
 import { challenge } from './challenge.js';
+import { withinBudget } from './budget.js';
 import { env } from './env.js';
 
 /**
@@ -37,6 +38,17 @@ export async function runAnalystLoop(
   // covering more subjects than one pass can hold still sweeps all of them
   // instead of re-analysing the same head of the list forever.
   let subjectCursor = 0;
+  // Newest evidence each subject had the last time it was analysed.
+  //
+  // Without this the rotation re-reads subjects that have not changed, which is
+  // most of them most of the time: dedup correctly refuses to re-post identical
+  // bytes, so a host that is simply still up produces nothing new for hours
+  // while the analyst keeps paying to conclude that again. Measured on a
+  // 10-subject mission this was the difference between a call a subject every
+  // pass and a call only when something actually moved.
+  const analysedThrough = new Map<string, string>();
+  // When each subject was last analysed, for the cooldown.
+  const analysedAt = new Map<string, number>();
   // Cold start: analyse whatever is already on the board once, before waiting
   // for new evidence.
   //
@@ -61,6 +73,19 @@ export async function runAnalystLoop(
     const mission = await prisma.mission.findUnique({ where: { id: missionId } });
     if (!mission || mission.status !== 'running') break;
 
+    const budget = await withinBudget(missionId, mission.limits);
+    if (!budget.ok) {
+      // Keep gathering, stop thinking. Evidence accumulates and is analysed
+      // when the trailing hour reopens, so the mission gets slower rather than
+      // blind — and the log says which it is.
+      log.warn(
+        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        'analyst: hourly budget reached, skipping',
+      );
+      lastCallAt = Date.now();
+      continue;
+    }
+
     await view.refresh();
     // Analyse the collapsed set, not the raw one: an analyst shown the same
     // observation five times will cite five ids for what is one signal, and
@@ -81,8 +106,29 @@ export async function runAnalystLoop(
     // costs the same per pass as one with 5 — it just takes more passes to
     // sweep. A mission with no fan-out has exactly one (empty) subject and this
     // reduces to the single call it always made.
-    const bySubject = groupBySubject(distinct);
-    if (bySubject.length === 0) { pending = false; continue; }
+    const all = groupBySubject(distinct);
+    if (all.length === 0) { pending = false; continue; }
+
+    // Two gates, and both are needed.
+    //
+    // New evidence: a subject whose feeds are reporting the same thing they
+    // reported last time has nothing for the analyst to say that it has not
+    // already said. Dedup makes this exact — an unchanged feed posts nothing.
+    //
+    // Cooldown: "new" is a low bar. A feed on a three-minute cron makes every
+    // subject new every three minutes, so without this the analyst re-reasons
+    // about a host that is simply still up, forever, at full price. This is the
+    // gate that actually sets cost per subject.
+    const nowMs = Date.now();
+    const bySubject = all.filter(
+      (g) =>
+        g.newest > (analysedThrough.get(g.subject) ?? '') &&
+        nowMs - (analysedAt.get(g.subject) ?? 0) >= env.ANALYST_SUBJECT_COOLDOWN_MS,
+    );
+    if (bySubject.length === 0) {
+      pending = false;
+      continue;
+    }
 
     if (subjectCursor >= bySubject.length) subjectCursor = 0;
     const take = Math.min(env.ANALYST_SUBJECTS_PER_PASS, bySubject.length);
@@ -107,6 +153,11 @@ export async function runAnalystLoop(
       // Taking a round-robin slice guarantees every live source is represented.
       const recent = sampleAcrossSources(group.findings, env.ANALYST_BATCH);
       if (recent.length === 0) continue;
+      // Marked before the call, not after: a call that fails or returns nothing
+      // still saw this evidence, and retrying it unchanged would just spend the
+      // same money on the same answer. New evidence re-opens the subject.
+      analysedThrough.set(group.subject, group.newest);
+      analysedAt.set(group.subject, Date.now());
 
       let proposals: Omit<Hypothesis, 'id' | 'agentId'>[];
       try {
@@ -194,6 +245,16 @@ export async function runAdversaryLoop(
     const mission = await prisma.mission.findUnique({ where: { id: missionId } });
     if (!mission || mission.status !== 'running') break;
 
+    const budget = await withinBudget(missionId, mission.limits);
+    if (!budget.ok) {
+      log.warn(
+        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        'adversary: hourly budget reached, skipping',
+      );
+      lastCallAt = Date.now();
+      continue;
+    }
+
     // One claim per pass. Attacking the whole queue at once would let a single
     // model call decide the fate of every claim on the board, which is exactly
     // the concentration this role exists to avoid.
@@ -259,6 +320,8 @@ export async function runAdversaryLoop(
 export interface SubjectGroup {
   subject: string;
   findings: Finding[];
+  /** Newest observedAt in the group. ISO-8601, so string order is time order. */
+  newest: string;
 }
 
 /**
@@ -279,7 +342,11 @@ function groupBySubject(findings: Finding[]): SubjectGroup[] {
     bySubject.set(subject, list);
   }
   return [...bySubject.entries()]
-    .map(([subject, list]) => ({ subject, findings: list }))
+    .map(([subject, list]) => ({
+      subject,
+      findings: list,
+      newest: list.reduce((max, f) => (f.provenance.observedAt > max ? f.provenance.observedAt : max), ''),
+    }))
     // Ties broken by name so the rotation order is stable between passes; an
     // order that reshuffles would let the cursor skip subjects at random.
     .sort((a, b) => b.findings.length - a.findings.length || a.subject.localeCompare(b.subject));

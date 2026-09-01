@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from '@hive/db';
 import type { ClaimCluster, Decision } from '@hive/swarm';
 import { env } from './env.js';
+import { recordUsage } from './pricing.js';
 
 /**
  * Head of desk. One model call, one decision.
@@ -64,18 +65,6 @@ Call record_decision exactly once.`;
 // Cents per million tokens. Mirrors workers/ai_agent/src/pricing.ts; the
 // coordinator is the only model call in this service so a local table is
 // cheaper than exporting one from a worker package.
-const PRICING: Record<string, { inPerM: number; outPerM: number }> = {
-  'claude-sonnet-5': { inPerM: 300, outPerM: 1500 },
-  'claude-sonnet-4-5': { inPerM: 300, outPerM: 1500 },
-  'claude-opus-5': { inPerM: 1500, outPerM: 7500 },
-};
-const PRICING_FALLBACK = { inPerM: 300, outPerM: 1500 };
-
-function costCents(model: string, inputTokens: number, outputTokens: number): number {
-  const p = PRICING[model] ?? PRICING_FALLBACK;
-  return Math.floor((inputTokens / 1_000_000) * p.inPerM + (outputTokens / 1_000_000) * p.outPerM);
-}
-
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
   if (!client) {
@@ -141,25 +130,16 @@ export async function decide(input: DecideInput): Promise<Decision> {
     ],
   });
 
-  // Cost tracking, same table the UI already reads for the AI spend line.
-  await prisma.aiUsage
-    .create({
-      data: {
-        jobId: `mission:${input.missionId}`,
-        provider: 'claude',
-        model: env.HIVE_COORDINATOR_MODEL,
-        inputTokens: res.usage.input_tokens,
-        outputTokens: res.usage.output_tokens,
-        costCents: costCents(
-          env.HIVE_COORDINATOR_MODEL,
-          res.usage.input_tokens,
-          res.usage.output_tokens,
-        ),
-      },
-    })
-    .catch(() => {
-      /* cost tracking must never fail a decision */
-    });
+  // Cost tracking through the shared recorder rather than a second price table
+  // of its own. Two tables meant two chances to be wrong about what a model
+  // costs, and one of them was — by a factor of ten, for months, in the number
+  // the console showed the operator.
+  await recordUsage({
+    missionId: input.missionId,
+    model: env.HIVE_COORDINATOR_MODEL,
+    inputTokens: res.usage.input_tokens,
+    outputTokens: res.usage.output_tokens,
+  });
 
   const block = res.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'record_decision',

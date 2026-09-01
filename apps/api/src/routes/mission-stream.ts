@@ -230,13 +230,17 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   // ai_agent job run for this mission's bots is attributed too.
   const dayAgo = new Date(now - 24 * 60 * 60_000);
   const hourAgo = new Date(now - 60 * 60_000);
+  //
+  // Summed in microcents, not cents. A swarm's bill is thousands of sub-cent
+  // calls; rounding each one to a whole cent before adding them up reported a
+  // fraction of what was actually spent.
   const [today, lastHour] = await Promise.all([
     prisma.aiUsage.aggregate({
-      _sum: { costCents: true },
+      _sum: { costMicroCents: true },
       where: { jobId: `mission:${missionId}`, createdAt: { gte: dayAgo } },
     }),
     prisma.aiUsage.aggregate({
-      _sum: { costCents: true },
+      _sum: { costMicroCents: true },
       where: { jobId: `mission:${missionId}`, createdAt: { gte: hourAgo } },
     }),
   ]);
@@ -287,8 +291,8 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
       constraintResults: (p.constraintResults ?? []) as MissionSnapshot['proposals'][number]['constraintResults'],
     })),
     cost: {
-      todayCents: today._sum.costCents ?? 0,
-      runRateCentsPerHour: lastHour._sum.costCents ?? 0,
+      todayCents: Math.round((today._sum.costMicroCents ?? 0) / 10_000),
+      runRateCentsPerHour: Math.round((lastHour._sum.costMicroCents ?? 0) / 10_000),
     },
     lastDecisionAt: mission.lastDecisionAt?.toISOString() ?? null,
     stalled: { pools: stalledPools, queuedJobs },

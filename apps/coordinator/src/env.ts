@@ -60,6 +60,23 @@ const Env = z.object({
   // ten busy missions cannot open ten times the connections.
   SWARM_MAX_CONCURRENT_MODEL_CALLS: z.coerce.number().int().positive().default(4),
 
+  // Default ceiling on one mission's model spend per trailing hour, in cents.
+  //
+  // A mission can override it through its own limits under
+  // `budget:cents_per_hour`. This is the backstop that makes "run hundreds of
+  // bots" a bounded decision: bots are free, thinking is not, and without a cap
+  // the only thing standing between a wide mission and a large bill is how
+  // often its loops happen to fire.
+  MISSION_BUDGET_CENTS_PER_HOUR: z.coerce.number().int().positive().default(100),
+  // Floor on the gap between two analyses of the SAME subject.
+  //
+  // The rotation already skips subjects with no new evidence, but "new" is a
+  // low bar: a feed that reports every three minutes makes every subject new
+  // every three minutes, so the analyst would re-reason about a host that is
+  // simply still up, forever. This says how often a subject is worth
+  // re-examining at all, and it is the knob that decides cost per subject:
+  // calls per hour is roughly subjects x 3600000 / this.
+  ANALYST_SUBJECT_COOLDOWN_MS: z.coerce.number().int().nonnegative().default(10 * 60_000),
   // How often approved proposals are picked up for execution.
   EXECUTOR_POLL_MS: z.coerce.number().int().positive().default(5_000),
   // Fallback recipient when a mission's owner has no email on file.

@@ -1,4 +1,5 @@
 import { prisma } from '@hive/db';
+import { costMicroCents } from './pricing-table.js';
 
 /**
  * Cost accounting for every model call the swarm makes.
@@ -8,19 +9,6 @@ import { prisma } from '@hive/db';
  * spend of $0.00 forever. AiUsage.costCents stays the rounded value the rest of
  * the UI already reads.
  */
-const PER_MILLION_MICROCENTS: Record<string, { in: number; out: number }> = {
-  'claude-sonnet-5': { in: 300_000, out: 1_500_000 },
-  'claude-sonnet-4-5': { in: 300_000, out: 1_500_000 },
-  'claude-opus-5': { in: 1_500_000, out: 7_500_000 },
-  'claude-haiku-4-5-20251001': { in: 80_000, out: 400_000 },
-};
-const FALLBACK = { in: 300_000, out: 1_500_000 };
-
-export function costMicroCents(model: string, inTok: number, outTok: number): number {
-  const p = PER_MILLION_MICROCENTS[model] ?? FALLBACK;
-  return Math.round((inTok / 1_000_000) * p.in + (outTok / 1_000_000) * p.out);
-}
-
 /** Never let cost accounting fail a decision — it is bookkeeping, not control flow. */
 export async function recordUsage(args: {
   missionId: string;
@@ -37,10 +25,17 @@ export async function recordUsage(args: {
         model: args.model,
         inputTokens: args.inputTokens,
         outputTokens: args.outputTokens,
+        // Both, on purpose. costCents is what the rest of the product already
+        // reads; microcents is what makes the total true. Rounding each call to
+        // whole cents threw away most of the bill — a swarm's spend is
+        // thousands of sub-cent calls, and every one of them rounded to zero.
         costCents: Math.round(micro / 10_000),
+        costMicroCents: micro,
       },
     })
     .catch(() => {
       /* bookkeeping must never break the loop */
     });
 }
+
+export { costMicroCents } from './pricing-table.js';

@@ -13,6 +13,7 @@ import {
 } from '@hive/swarm';
 import { decide } from './decide.js';
 import { env } from './env.js';
+import { withinBudget } from './budget.js';
 
 /**
  * One loop per running mission.
@@ -67,6 +68,16 @@ export async function runMissionLoop(
 
     const mission = await prisma.mission.findUnique({ where: { id: missionId } });
     if (!mission || mission.status !== 'running') break;
+
+    const budget = await withinBudget(missionId, mission.limits);
+    if (!budget.ok) {
+      log.warn(
+        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        'coordinator: hourly budget reached, skipping',
+      );
+      lastDecisionAt = Date.now();
+      continue;
+    }
 
     await view.refresh();
     const state = view.state;

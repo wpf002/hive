@@ -123,10 +123,18 @@ model AiUsage {
   model        String
   inputTokens  Int
   outputTokens Int
+  // Rounded whole cents, kept because the rest of the product already reads it.
   costCents    Int
+  // The number that is actually true. A swarm's bill is thousands of sub-cent
+  // calls, and rounding each one to a whole cent discards most of it — summing
+  // costCents over a busy mission reported a fraction of real spend.
+  costMicroCents Int @default(0)
   createdAt    DateTime @default(now())
 
   @@index([provider, createdAt])
+  // The spend governor asks "what has this mission cost in the last hour?" on
+  // every model call, and jobId is how a mission's usage is tagged.
+  @@index([jobId, createdAt])
 }
 
 // ============ Trading (Phase 3b) ============
