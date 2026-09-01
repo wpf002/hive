@@ -151,6 +151,30 @@ export async function missionRoutes(app: FastifyInstance) {
           ...(body.approvalMode !== undefined ? { approvalMode: body.approvalMode } : {}),
         },
       });
+      // Stopping a mission must stop its feeds too. The coordinator's loops
+      // exit on a status change, so model spend halts on its own — but the
+      // gatherers are ordinary scheduled bots, and the scheduler would keep
+      // firing them into workers for a mission nobody is watching. "Stop" that
+      // leaves the meter running is not a stop.
+      if (body.status && body.status !== existing.status) {
+        const resuming = body.status === 'running';
+        if (resuming || existing.status === 'running') {
+          const agents = await prisma.missionAgent.findMany({
+            where: { missionId: updated.id, role: 'gatherer' },
+            select: { botId: true },
+          });
+          const botIds = agents.map((a) => a.botId);
+          if (botIds.length > 0) {
+            await prisma.schedule.updateMany({
+              where: { botId: { in: botIds } },
+              data: resuming
+                ? { enabled: true, nextRunAt: new Date() }
+                : { enabled: false, nextRunAt: null },
+            });
+          }
+        }
+      }
+
       if (body.status && body.status !== existing.status) {
         await writeAuditLog(req, {
           userId: req.user?.id,

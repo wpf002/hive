@@ -132,7 +132,7 @@ function Prompt({
             <button
               onClick={onSubmit}
               disabled={busy || !value.trim()}
-              className="shrink-0 rounded border border-honey-500 px-3 py-1 font-mono text-xs text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-30"
+              className="shrink-0 rounded border border-honey-500 px-3 py-1 font-mono text-xs uppercase tracking-[0.12em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-30"
             >
               {busy ? 'composing…' : 'go'}
             </button>
@@ -160,6 +160,19 @@ function Prompt({
 
 function Field({ missionId }: { missionId: string }) {
   const { snapshot, connected } = useMissionStream(missionId);
+  const [pausing, setPausing] = useState(false);
+
+  // Stopping is the one control that always has to be one click away. Every
+  // running mission polls its feeds and wakes a model on each genuine board
+  // change, so a mission you have stopped watching is still spending.
+  async function setStatus(status: 'running' | 'paused') {
+    setPausing(true);
+    try {
+      await api.patch(`/api/missions/${missionId}`, { status });
+    } finally {
+      setPausing(false);
+    }
+  }
 
   if (!snapshot) {
     return (
@@ -193,7 +206,27 @@ function Field({ missionId }: { missionId: string }) {
             {snapshot.stalled.pools.join(', ')} worker offline
           </span>
         )}
-        <span className="ml-auto">${(snapshot.cost.todayCents / 100).toFixed(2)} today</span>
+        <span className="ml-auto tabular-nums">
+          ${(snapshot.cost.todayCents / 100).toFixed(2)} today
+        </span>
+        {snapshot.status === 'running' ? (
+          <button
+            onClick={() => setStatus('paused')}
+            disabled={pausing}
+            className="rounded border border-hive-muted px-2 py-0.5 uppercase tracking-[0.08em] text-hive-subtle hover:border-red-600 hover:text-red-400 disabled:opacity-40"
+            title="Stop the feeds and the model calls"
+          >
+            {pausing ? '…' : 'stop'}
+          </button>
+        ) : (
+          <button
+            onClick={() => setStatus('running')}
+            disabled={pausing}
+            className="rounded border border-honey-500 px-2 py-0.5 uppercase tracking-[0.08em] text-honey-500 hover:bg-honey-500 hover:text-hive-bg disabled:opacity-40"
+          >
+            {pausing ? '…' : 'resume'}
+          </button>
+        )}
       </div>
 
       <div className="relative min-h-0 flex-1">
@@ -223,6 +256,10 @@ function Field({ missionId }: { missionId: string }) {
                 {top.independentSources} src
               </span>
               <span className={cn(top.refuted && 'text-hive-subtle line-through')}>{top.claim}</span>
+            </p>
+          ) : snapshot.status !== 'running' ? (
+            <p className="font-mono text-xs text-hive-subtle">
+              Stopped. No feeds are polling and no model calls are being made.
             </p>
           ) : snapshot.stalled.pools.length > 0 ? (
             <p className="font-mono text-xs leading-relaxed text-red-400">
