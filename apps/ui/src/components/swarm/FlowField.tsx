@@ -97,17 +97,27 @@ export function FlowField({
     let particles: Particle[] = [];
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    /**
+     * Sync the backing store to the element's real size.
+     *
+     * Called from the draw loop rather than only from a ResizeObserver, because
+     * the observer is not reliably the thing that tells us: the canvas is
+     * absolutely positioned, and when its box changed without a matching
+     * observer callback `w` went stale — the ground fill and every particle
+     * spawn are bounded by `w`, so the region beyond the old width was simply
+     * never painted and sat there as a hard black bar. Measuring each frame
+     * costs a layout read and removes the whole class of bug.
+     */
     const resize = () => {
-      const r = canvas.getBoundingClientRect();
-      // ResizeObserver fires on sub-pixel layout settling too. Re-seating the
-      // field on every one of those pins every particle to its source forever,
-      // so only react to a real size change — but never skip the first real
-      // measurement, or w stays 0 and the draw loop spins on its size guard.
-      if (w > 0 && Math.abs(r.width - w) < 1 && Math.abs(r.height - h) < 1) return;
-      if (r.width < 8 || r.height < 8) return;
+      const cw = canvas.clientWidth;
+      const ch = canvas.clientHeight;
+      if (cw < 8 || ch < 8) return;
+      // Sub-pixel settling would otherwise re-seat the field constantly, which
+      // pins every particle to its source forever.
+      if (w > 0 && Math.abs(cw - w) < 1 && Math.abs(ch - h) < 1) return;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = r.width;
-      h = r.height;
+      w = cw;
+      h = ch;
       canvas.width = Math.max(1, Math.floor(w * dpr));
       canvas.height = Math.max(1, Math.floor(h * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -165,6 +175,9 @@ export function FlowField({
     };
 
     const draw = (t: number) => {
+      // Authoritative size check, every frame. Cheap, and it means the field can
+      // never be left painting into a stale rectangle.
+      resize();
       // Layout may not have sized the canvas yet on the first frame. Spawning
       // into a 0x0 field puts every particle at the origin, where they sit
       // until they expire — so wait for a real size instead.
