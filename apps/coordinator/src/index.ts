@@ -4,8 +4,9 @@ import type { LoggerOptions } from 'pino';
 import { prisma } from '@hive/db';
 import { createHealthz, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
-import { runMissionLoop } from './loop.js';
+import { MissionRuntime } from './mission-runtime.js';
 import { expireStaleProposals } from './expiry.js';
+import { runExecutorPass } from './execute.js';
 
 const loggerOptions: LoggerOptions = {
   level: env.LOG_LEVEL,
@@ -27,11 +28,7 @@ const startedAt = Date.now();
 // connections. This one is for health probes and loop bookkeeping only.
 const redis = new Redis(env.REDIS_URL, { lazyConnect: false });
 
-interface RunningLoop {
-  controller: AbortController;
-  redis: Redis;
-}
-const loops = new Map<string, RunningLoop>();
+const loops = new Map<string, MissionRuntime>();
 
 const healthz = createHealthz({
   service: 'coordinator',
@@ -85,25 +82,15 @@ async function reconcile(): Promise<void> {
 
   for (const id of wanted) {
     if (loops.has(id)) continue;
-    const controller = new AbortController();
-    // Blocking reads need a dedicated connection with retries disabled.
-    const loopRedis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: false });
-    loops.set(id, { controller, redis: loopRedis });
-    app.log.info({ missionId: id }, 'mission loop started');
-    void runMissionLoop(id, loopRedis, controller.signal, app.log as never)
-      .catch((err) => app.log.error({ err, missionId: id }, 'mission loop crashed'))
-      .finally(() => {
-        loopRedis.disconnect();
-        // Only clear if this is still the registered loop — a stop/start race
-        // must not delete the newer loop's entry.
-        if (loops.get(id)?.controller === controller) loops.delete(id);
-      });
+    const runtime = new MissionRuntime(id, app.log as never);
+    loops.set(id, runtime);
+    runtime.start();
   }
 
-  for (const [id, loop] of loops) {
+  for (const [id, runtime] of loops) {
     if (!wanted.has(id)) {
-      loop.controller.abort();
-      app.log.info({ missionId: id }, 'mission loop stopping');
+      runtime.stop();
+      loops.delete(id);
     }
   }
 }
@@ -113,7 +100,7 @@ const timers: NodeJS.Timeout[] = [];
 async function shutdown(signal: string): Promise<void> {
   app.log.info({ signal }, 'shutting down');
   for (const t of timers) clearInterval(t);
-  for (const loop of loops.values()) loop.controller.abort();
+  for (const runtime of loops.values()) runtime.stop();
   await app.close();
   redis.disconnect();
   await prisma.$disconnect();
@@ -138,4 +125,14 @@ timers.push(
       app.log.error({ err }, 'proposal expiry sweep failed'),
     );
   }, 30_000),
+);
+
+// Approved proposals are executed here rather than inside a mission loop, so
+// an approval still fires while its mission is being restarted.
+timers.push(
+  setInterval(() => {
+    void runExecutorPass(app.log as never).catch((err) =>
+      app.log.error({ err }, 'executor pass failed'),
+    );
+  }, env.EXECUTOR_POLL_MS),
 );

@@ -13,6 +13,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
     "@hive/db": "workspace:*",
+    "@hive/email": "workspace:*",
     "@hive/shared": "workspace:*",
     "@hive/swarm": "workspace:*",
     "fastify": "^4.28.0",

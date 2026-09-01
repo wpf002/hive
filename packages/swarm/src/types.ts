@@ -80,6 +80,10 @@ export type Challenge = z.infer<typeof Challenge>;
 export const PROPOSAL_STATUSES = [
   'pending',
   'approved',
+  // Claimed by an executor. The transition approved -> executing is what makes
+  // double-execution impossible: it is a conditional update, so exactly one
+  // executor can win it.
+  'executing',
   'rejected',
   'expired',
   'executed',

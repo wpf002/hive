@@ -105,6 +105,9 @@ importers:
       '@hive/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@hive/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@hive/shared':
         specifier: workspace:*
         version: link:../../packages/shared

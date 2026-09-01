@@ -174,6 +174,42 @@ The swarm field is a foraging colony, and the layout carries meaning:
 - The coordinator is the queen at the comb's heart, flaring once per decision —
   the only moment a model call happens.
 
+## The agent runtime
+
+Four loops run per running mission, started and stopped as a unit by
+`MissionRuntime` and reconciled from the database like everything else:
+
+| Loop | Model call | What it does |
+|---|---|---|
+| gatherer bridge | never | polls for completed gatherer jobs, turns each upstream item into a `Finding` |
+| analyst | yes | collapsed findings → `Hypothesis`, citing the finding ids behind each claim |
+| adversary | yes | one claim at a time → `Challenge`, prompted to refute rather than evaluate |
+| coordinator | yes | the whole board → one gated `Proposal` |
+
+They are peers, not a pipeline: nothing calls anything else, they communicate
+only through the board. That is what lets a role be added or removed without
+touching the others.
+
+The gatherer bridge is deterministic on purpose. A gatherer is an ordinary Hive
+bot on a schedule — it knows nothing about missions, and its result lands in
+`Job.result` like any other. Doing the translation here rather than inside the
+workers means every existing pool becomes a usable gatherer with no worker
+changes. It polls rather than subscribing, because job completion has no durable
+event and a missed message silently drops evidence; a cursor over `finishedAt`
+is replayable and survives a restart.
+
+**Hashing is the load-bearing part.** `contentHash` covers one upstream item, not
+a whole job — hashing a scoreboard means one score change invalidates every
+other game in the same fetch. Volatile fields are stripped per template: the
+sportsbook scraper regenerates `fetchedAt` every poll and the ESPN envelope
+carries a `date` derived from `now()`, either of which would defeat dedup
+entirely while leaving the system looking healthy. Hashing lives in TypeScript
+only: Python's `json.dumps` emits `1.0` where `JSON.stringify` emits `1`, so a
+cross-language hash of identical data diverges silently.
+
+Verified on live data: an ESPN scrape produced 15 findings; re-running the
+identical scrape produced `posted: 0, duplicate: 15`.
+
 ## Setup
 
 ```bash
@@ -219,12 +255,12 @@ run read-only until the digest shows it calling things correctly, then widen.
 
 ## Known gaps
 
-- **No agent runtime yet.** The coordinator, board, dedup, constraints, approval
-  gate and terminal are all live, but nothing yet posts real findings to the
-  board — gatherers and extractors don't write to it. `seed:swarm` fills a board
-  so the rest can be exercised end to end. Wiring the worker side is the next
-  step.
-- No executor: an approved proposal is recorded but nothing acts on it.
+- Only the `notify` executor verb is implemented. Any other action is recorded
+  as `failed` rather than silently ignored, because a mission whose action never
+  happens and never complains is worse than one that errors.
+- The coordinator can produce several near-duplicate proposals for the same
+  underlying event, because each board change re-runs the decision and the
+  claims differ only in wording. Dedup applies to findings, not to proposals.
 - `clusterByClaim` normalizes claims with string matching. Fine at 20 agents,
   needs embeddings past a few hundred.
 - No replay tooling. Mission state is reconstructable from the stream, but

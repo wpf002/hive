@@ -25,6 +25,8 @@ export type { BoardSnapshot } from './blackboard.js';
 
 export { BoardView } from './board-view.js';
 
+export { canonicalJson, contentHash, stripVolatile, isoUtc, NEVER_HASH } from './provenance.js';
+
 export {
   collapseFindings,
   scoreIndependence,
