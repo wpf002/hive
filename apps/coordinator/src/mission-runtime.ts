@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import type { Logger } from 'pino';
+import { captureError } from '@hive/observability';
 import { env } from './env.js';
 import { runMissionLoop } from './loop.js';
 import { runGathererBridge } from './gatherer/bridge.js';
@@ -31,7 +32,17 @@ export class MissionRuntime {
       const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: false });
       this.connections.push(redis);
       void fn(redis, this.controller.signal)
-        .catch((err) => this.log.error({ err, missionId: this.missionId, role: name }, 'role loop crashed'))
+        .catch((err) => {
+          // A role dying takes a capability off the board without stopping the
+          // mission: it keeps running, quietly missing its analyst or its
+          // adversary, and the console shows a mission that looks healthy and
+          // never concludes anything. That has to reach someone.
+          this.log.error({ err, missionId: this.missionId, role: name }, 'role loop crashed');
+          captureError(err, {
+            where: `mission-role:${name}`,
+            extra: { missionId: this.missionId },
+          });
+        })
         .finally(() => {
           try { redis.disconnect(); } catch { /* already gone */ }
         });

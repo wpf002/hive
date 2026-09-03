@@ -34,6 +34,7 @@
     "@hive/db": "workspace:*",
     "@hive/email": "workspace:*",
     "@hive/kms": "workspace:*",
+    "@hive/observability": "workspace:*",
     "@hive/shared": "workspace:*",
     "@hive/storage": "workspace:*",
     "@hive/swarm": "workspace:*",

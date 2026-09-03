@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hive/db": "workspace:*",
+    "@hive/observability": "workspace:*",
     "@hive/shared": "workspace:*",
     "@hive/worker-base-ts": "workspace:*",
     "fastify": "^4.28.0",

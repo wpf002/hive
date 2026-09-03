@@ -5,6 +5,7 @@ import { prisma } from '@hive/db';
 import { dispatchStreamFor, POOL_STREAM_ANY } from '@hive/worker-base-ts';
 import { createHealthz, workerAvailable, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
+import { initObservability } from '@hive/observability';
 
 const KNOWN_POOLS = new Set([
   'browser',
@@ -233,6 +234,17 @@ async function unroutableSweep(): Promise<void> {
 
 try {
   await ensureGroup();
+  // Fatal handlers before the port opens: a process that starts serving and
+  // then dies to an unhandled rejection with no log line is the failure this
+  // guards. Reporting itself is optional (SENTRY_DSN); the handlers are not.
+  await initObservability({
+    service: 'dispatcher',
+    dsn: process.env.SENTRY_DSN,
+    release: process.env.HIVE_RELEASE,
+    logger: app.log,
+    onFatal: () => app.close(),
+  });
+
   await app.listen({ port: env.DISPATCHER_PORT, host: '0.0.0.0' });
   void consumeLoop().catch((err) => {
     app.log.error({ err }, 'consume_loop_crashed');

@@ -15,6 +15,15 @@ const Env = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().default('Hive <onboarding@resend.dev>'),
   HIVE_EMAIL_PROVIDER: z.string().default('resend'),
+  // Warn a user when their swarm's model spend crosses this in 24 hours, in
+  // cents. A warning, never a brake: cutting missions off on a threshold guess
+  // would break the thing they are paying for. 0 disables it.
+  //
+  // Default $20/day. A mission covering ten subjects on a ten-minute cooldown
+  // runs about $1.40/hour, so this is roughly one such mission left running
+  // overnight — high enough not to nag, low enough to catch a runaway before
+  // it becomes a month's bill.
+  SPEND_ALERT_DAILY_CENTS: z.coerce.number().int().nonnegative().default(2000),
 });
 
 export const env = Env.parse(process.env);

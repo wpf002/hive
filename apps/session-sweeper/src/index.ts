@@ -11,6 +11,7 @@ import { prisma } from '@hive/db';
 import { createHealthz, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
 import { startAuditAlerts } from './audit-alerts.js';
+import { initObservability } from '@hive/observability';
 
 const loggerOptions: LoggerOptions = {
   level: env.LOG_LEVEL,
@@ -110,6 +111,17 @@ async function reapWorkers(): Promise<void> {
 }
 
 try {
+  // Fatal handlers before the port opens: a process that starts serving and
+  // then dies to an unhandled rejection with no log line is the failure this
+  // guards. Reporting itself is optional (SENTRY_DSN); the handlers are not.
+  await initObservability({
+    service: 'session-sweeper',
+    dsn: process.env.SENTRY_DSN,
+    release: process.env.HIVE_RELEASE,
+    logger: app.log,
+    onFatal: () => app.close(),
+  });
+
   await app.listen({ port: env.SESSION_SWEEPER_PORT, host: '0.0.0.0' });
   app.log.info({ port: env.SESSION_SWEEPER_PORT, intervalSeconds: env.SESSION_SWEEP_INTERVAL_S }, 'started');
   void sweep(); // run once at boot so the healthcheck shows a recent run quickly

@@ -7,6 +7,7 @@ import { env } from './env.js';
 import { MissionRuntime } from './mission-runtime.js';
 import { expireStaleProposals } from './expiry.js';
 import { runExecutorPass } from './execute.js';
+import { captureError, initObservability } from '@hive/observability';
 
 const loggerOptions: LoggerOptions = {
   level: env.LOG_LEVEL,
@@ -109,21 +110,36 @@ async function shutdown(signal: string): Promise<void> {
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
+// Fatal handlers before the port opens: a process that starts serving and
+// then dies to an unhandled rejection with no log line is the failure this
+// guards. Reporting itself is optional (SENTRY_DSN); the handlers are not.
+await initObservability({
+  service: 'coordinator',
+  dsn: process.env.SENTRY_DSN,
+  release: process.env.HIVE_RELEASE,
+  logger: app.log,
+  onFatal: () => app.close(),
+});
+
 await app.listen({ port: env.COORDINATOR_PORT, host: '0.0.0.0' });
 await reconcile();
 
 timers.push(
   setInterval(() => {
-    void reconcile().catch((err) => app.log.error({ err }, 'reconcile failed'));
+    void reconcile().catch((err) => {
+      app.log.error({ err }, 'reconcile failed');
+      captureError(err, { where: 'coordinator-reconcile' });
+    });
   }, env.COORDINATOR_RECONCILE_MS),
 );
 
 // A pending proposal past its TTL must not sit in the queue looking actionable.
 timers.push(
   setInterval(() => {
-    void expireStaleProposals(app.log as never).catch((err) =>
-      app.log.error({ err }, 'proposal expiry sweep failed'),
-    );
+    void expireStaleProposals(app.log as never).catch((err) => {
+      app.log.error({ err }, 'proposal expiry sweep failed');
+      captureError(err, { where: 'proposal-expiry' });
+    });
   }, 30_000),
 );
 
@@ -131,8 +147,9 @@ timers.push(
 // an approval still fires while its mission is being restarted.
 timers.push(
   setInterval(() => {
-    void runExecutorPass(app.log as never).catch((err) =>
-      app.log.error({ err }, 'executor pass failed'),
-    );
+    void runExecutorPass(app.log as never).catch((err) => {
+      app.log.error({ err }, 'executor pass failed');
+      captureError(err, { where: 'executor-pass' });
+    });
   }, env.EXECUTOR_POLL_MS),
 );

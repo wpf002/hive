@@ -24,6 +24,7 @@ import { missionStreamRoutes } from './routes/mission-stream.js';
 import { missionComposeRoutes } from './routes/mission-compose.js';
 import { initStorage } from './lib/artifacts.js';
 import { isOriginAllowed } from './lib/cors.js';
+import { initObservability } from '@hive/observability';
 
 await initStorage();
 
@@ -75,6 +76,17 @@ try {
   // Honor the platform-injected $PORT (Railway, Heroku, etc.); fall back to the
   // configured API_PORT (Fly sets PORT=4000 which matches the default anyway).
   const port = process.env.PORT ? Number(process.env.PORT) : env.API_PORT;
+  // Fatal handlers before the port opens: a process that starts serving and
+  // then dies to an unhandled rejection with no log line is the failure this
+  // guards. Reporting itself is optional (SENTRY_DSN); the handlers are not.
+  await initObservability({
+    service: 'api',
+    dsn: process.env.SENTRY_DSN,
+    release: process.env.HIVE_RELEASE,
+    logger: app.log,
+    onFatal: () => app.close(),
+  });
+
   await app.listen({ port, host: '0.0.0.0' });
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');

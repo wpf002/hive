@@ -5,6 +5,8 @@ import { prisma } from '@hive/db';
 import { createHealthz, type HealthChecks } from '@hive/shared';
 import { createEmailProvider } from '@hive/email';
 import { env } from './env.js';
+import { captureError, initObservability } from '@hive/observability';
+import { spendWatchTick } from './spend-watch.js';
 
 const TICK_MS = 30_000;
 const RELOAD_MS = 60_000;
@@ -317,6 +319,17 @@ async function backfillNextRunAt(): Promise<void> {
 }
 
 try {
+  // Fatal handlers before the port opens: a process that starts serving and
+  // then dies to an unhandled rejection with no log line is the failure this
+  // guards. Reporting itself is optional (SENTRY_DSN); the handlers are not.
+  await initObservability({
+    service: 'scheduler',
+    dsn: process.env.SENTRY_DSN,
+    release: process.env.HIVE_RELEASE,
+    logger: app.log,
+    onFatal: () => app.close(),
+  });
+
   await app.listen({ port: env.SCHEDULER_PORT, host: '0.0.0.0' });
   await backfillNextRunAt();
   await loadSchedules();
@@ -328,6 +341,16 @@ try {
   setInterval(() => void loadSchedules().catch((err) => app.log.error({ err }, 'reload_failed')), RELOAD_MS);
   setInterval(() => void digestTick().catch((err) => app.log.error({ err }, 'digest_loop_failed')), TICK_MS);
   setInterval(() => void alertTick().catch((err) => app.log.error({ err }, 'alert_loop_failed')), TICK_MS);
+  // Spend moves slowly compared to jobs, and the check is a single aggregate
+  // query, so once every ten minutes is plenty.
+  setInterval(
+    () =>
+      void spendWatchTick(app.log as never).catch((err) => {
+        app.log.error({ err }, 'spend_watch_failed');
+        captureError(err, { where: 'spend-watch-tick' });
+      }),
+    10 * 60_000,
+  );
 } catch (err) {
   app.log.error({ err }, 'failed_to_start');
   process.exit(1);
