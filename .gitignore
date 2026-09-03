@@ -57,3 +57,6 @@ scripts/.localworker.env
 
 # secrets — never commit (symlinks to root .env)
 apps/ui/.env
+apps/ui/e2e/.auth/
+apps/ui/test-results/
+apps/ui/playwright-report/

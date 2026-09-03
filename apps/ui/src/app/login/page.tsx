@@ -16,7 +16,11 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get('next') || '/dashboard';
+  // Everyone lands on the product. `/dashboard` was the default from when the
+  // operator console was the whole app; it now sends admins straight past the
+  // thing they are selling into the machinery underneath it, and sends
+  // customers to a page they are not allowed to open.
+  const next = params.get('next') || '/';
   const justReset = params.get('reset') === '1';
 
   const [email, setEmail] = useState('');

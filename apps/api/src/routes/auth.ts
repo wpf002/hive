@@ -88,9 +88,38 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.code(201).send(publicUser(user));
   });
 
+  /**
+   * Two buckets, because one keyed only on IP punishes the wrong people.
+   *
+   * Everyone behind an office NAT, a VPN or a mobile carrier shares a source
+   * address. At ten attempts per five minutes for the whole address, a handful
+   * of colleagues signing in — or one of them fumbling a password — locks out
+   * everybody else on that network, and the error they get says nothing about
+   * why.
+   *
+   * So the tight bucket is per account per address: it still stops someone
+   * guessing one person's password, which is the attack, without making one
+   * user's typo everyone else's problem. A wider per-address bucket stays
+   * behind it to blunt a spray across many accounts from one host.
+   */
+  const loginLimiters = [
+    rateLimit({
+      name: 'login',
+      max: 10,
+      windowSec: 300,
+      keyFn: (req) => {
+        const email = (req.body as { email?: unknown } | undefined)?.email;
+        // Normalised so casing cannot be used to mint fresh buckets.
+        const who = typeof email === 'string' ? email.trim().toLowerCase() : 'unknown';
+        return `${req.ip}:${who}`;
+      },
+    }),
+    rateLimit({ name: 'login-source', max: 60, windowSec: 300 }),
+  ];
+
   app.post(
     '/api/auth/login',
-    { preHandler: rateLimit({ name: 'login', max: 10, windowSec: 300 }) },
+    { preHandler: loginLimiters },
     async (req, reply) => {
     const body = LoginBody.parse(req.body);
     const user = await prisma.user.findUnique({ where: { email: body.email } });
@@ -247,6 +276,58 @@ export async function authRoutes(app: FastifyInstance) {
     });
     return reply.code(201).send(publicUser(user));
   });
+
+  /**
+   * Remove a user and everything that belonged to them.
+   *
+   * The cascade is deliberate and wide: missions, and through them findings,
+   * hypotheses and proposals, all go. A product that takes people's data owes
+   * them a way to have it actually deleted, and a soft flag that leaves the
+   * rows in place is not that.
+   *
+   * Two guards. An admin cannot delete themselves — that is nearly always a
+   * misclick, and recovering from it means editing the database by hand. And
+   * the last admin cannot be deleted at all, because an installation with no
+   * admin has no way back in.
+   */
+  app.delete<{ Params: { id: string } }>(
+    '/api/admin/users/:id',
+    { preHandler: requireRole('admin') },
+    async (req, reply) => {
+      const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+      if (!user) {
+        return reply.code(404).send({ error: { code: 'not_found', message: 'user not found' } });
+      }
+      if (req.user?.id === user.id) {
+        return reply.code(400).send({
+          error: { code: 'cannot_delete_self', message: 'you cannot delete your own account' },
+        });
+      }
+      if (user.role === 'admin') {
+        const admins = await prisma.user.count({ where: { role: 'admin' } });
+        if (admins <= 1) {
+          return reply.code(409).send({
+            error: {
+              code: 'last_admin',
+              message: 'this is the only admin — promote another account first',
+            },
+          });
+        }
+      }
+      await revokeAllSessionsForUser(user.id);
+      await prisma.user.delete({ where: { id: user.id } });
+      // Written after the delete so the record survives the account: the audit
+      // trail is the one thing that must outlive what it describes.
+      await writeAuditLog(req, {
+        userId: req.user?.id ?? null,
+        action: 'admin.user_deleted',
+        targetType: 'user',
+        targetId: user.id,
+        payload: { email: user.email, role: user.role },
+      });
+      return reply.code(204).send();
+    },
+  );
 
   app.post<{ Params: { id: string } }>(
     '/api/admin/users/:id/reset-password',

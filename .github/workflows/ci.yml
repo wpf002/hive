@@ -122,3 +122,94 @@ jobs:
             echo "::error::integration suite passed zero tests"
             exit 1
           fi
+
+  e2e:
+    name: end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hive
+          POSTGRES_PASSWORD: hive
+          POSTGRES_DB: hive
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://hive:hive@localhost:5432/hive
+      REDIS_URL: redis://localhost:6379
+      API_AUTH_TOKEN: ci-api-token-not-a-real-credential
+      WORKER_AUTH_TOKEN: ci-worker-token-not-a-real-credential
+      HIVE_SECRETS_KEY: '0000000000000000000000000000000000000000000000000000000000000001'
+      API_PORT: '4010'
+      HIVE_PUBLIC_APP_URL: http://localhost:3002
+      API_PROXY_TARGET: http://localhost:4010
+      NEXT_PUBLIC_API_BASE: http://localhost:4010
+      E2E_BASE_URL: http://localhost:3002
+      E2E_API_BASE: http://localhost:4010
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hive/db generate
+      - run: pnpm --filter @hive/db migrate:deploy
+
+      - name: Install browser
+        run: pnpm --filter @hive/ui exec playwright install --with-deps chromium
+
+      # Against a production build, not the dev server. The gate under test is
+      # a server component, and dev and prod resolve those differently enough
+      # that passing on one says little about the other.
+      - run: pnpm --filter @hive/ui build
+
+      - name: Start API and UI
+        run: |
+          pnpm --filter @hive/api dev > /tmp/api.log 2>&1 &
+          pnpm --filter @hive/ui start > /tmp/ui.log 2>&1 &
+          # Wait for both rather than sleeping: a fixed sleep is either flaky
+          # or slow, and on a cold runner it is both.
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4010/healthz >/dev/null \
+              && curl -sf -o /dev/null http://localhost:3002/login && exit 0
+            sleep 2
+          done
+          echo "::error::API or UI did not come up"
+          tail -50 /tmp/api.log /tmp/ui.log
+          exit 1
+
+      - run: pnpm --filter @hive/ui test:e2e
+
+      - name: Server logs on failure
+        if: failure()
+        run: tail -100 /tmp/api.log /tmp/ui.log
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/ui/playwright-report/
+            apps/ui/test-results/
+          retention-days: 7
