@@ -13,6 +13,7 @@ import { analyze } from './analyze.js';
 import { challenge } from './challenge.js';
 import { withinBudget } from './budget.js';
 import { env } from './env.js';
+import { effectivePlan } from '@hive/shared';
 
 /**
  * The two model-calling board consumers.
@@ -70,16 +71,31 @@ export async function runAnalystLoop(
 
     if (Date.now() - lastCallAt < env.ANALYST_MIN_INTERVAL_MS) continue;
 
-    const mission = await prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        user: {
+          select: { id: true, plan: true, quotaDailySpendCents: true },
+        },
+      },
+    });
     if (!mission || mission.status !== 'running') break;
 
-    const budget = await withinBudget(missionId, mission.limits);
+    const budget = await withinBudget(missionId, mission.limits, {
+      userId: mission.user.id,
+      dailyCapCents: effectivePlan(mission.user).dailySpendCents,
+    });
     if (!budget.ok) {
       // Keep gathering, stop thinking. Evidence accumulates and is analysed
       // when the trailing hour reopens, so the mission gets slower rather than
       // blind — and the log says which it is.
       log.warn(
-        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        {
+          missionId,
+          scope: budget.scope,
+          spentCents: Math.round(budget.spentCents),
+          capCents: budget.capCents,
+        },
         'analyst: hourly budget reached, skipping',
       );
       lastCallAt = Date.now();
@@ -242,13 +258,28 @@ export async function runAdversaryLoop(
     if (queue.length === 0) continue;
     if (Date.now() - lastCallAt < env.ADVERSARY_MIN_INTERVAL_MS) continue;
 
-    const mission = await prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        user: {
+          select: { id: true, plan: true, quotaDailySpendCents: true },
+        },
+      },
+    });
     if (!mission || mission.status !== 'running') break;
 
-    const budget = await withinBudget(missionId, mission.limits);
+    const budget = await withinBudget(missionId, mission.limits, {
+      userId: mission.user.id,
+      dailyCapCents: effectivePlan(mission.user).dailySpendCents,
+    });
     if (!budget.ok) {
       log.warn(
-        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        {
+          missionId,
+          scope: budget.scope,
+          spentCents: Math.round(budget.spentCents),
+          capCents: budget.capCents,
+        },
         'adversary: hourly budget reached, skipping',
       );
       lastCallAt = Date.now();

@@ -32,8 +32,14 @@ model Bot {
   template         BotTemplate    @relation(fields: [templateId], references: [id])
   // userId = null means a shared/admin bot visible only to admins.
   // Set to the owning user's id for user-created bots.
+  //
+  // Cascade, not SetNull. SetNull meant deleting an account left its bots
+  // behind as ownerless rows — still holding that account's encrypted config,
+  // still visible to admins, still attached to whatever schedules they had.
+  // A product that offers to delete someone's account has to actually delete
+  // what belonged to them; orphaning it is the failure wearing a tidy face.
   userId           String?
-  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user             User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
   config           Json
   // Phase 5b: overrides template.affinity when set. Same shape: { region?, zone? }.
@@ -196,6 +202,15 @@ model User {
   passwordHash String
   displayName  String
   role         String       @default("user") // admin | user
+  // Which set of limits applies. Plans are defined in code rather than in a
+  // table: they change with pricing decisions, not with data, and a table
+  // would mean a migration every time someone renames a tier.
+  plan         String       @default("free")
+  // Per-user overrides. Null means "whatever the plan says", so raising one
+  // customer's ceiling does not require inventing a plan for them.
+  quotaMaxBots         Int?
+  quotaMaxMissions     Int?
+  quotaDailySpendCents Int?
   createdAt    DateTime     @default(now())
   lastLoginAt  DateTime?
   sessions     Session[]

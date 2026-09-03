@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, Prisma } from '@hive/db';
 import { requireAuth, requireRole } from '../auth.js';
 import { encryptBotConfig, maskBotConfig } from '../lib/secrets.js';
+import { checkHeadroom, quotaFor } from '../lib/quota.js';
 
 type TemplateForSecrets = { configSchema: unknown };
 
@@ -63,6 +64,15 @@ export async function botRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         error: { code: 'invalid_template', message: `templateId ${body.templateId} not found` },
       });
+    }
+    // The third door to the same resource. A static-token caller has no user
+    // and no quota to check — that token is the operator, not a tenant.
+    if (req.user?.id) {
+      const usage = await quotaFor(req.user.id);
+      const noRoom = checkHeadroom(usage, { bots: 1 });
+      if (noRoom) {
+        return reply.code(402).send({ error: { code: noRoom.code, message: noRoom.message } });
+      }
     }
     const encryptedConfig = await encryptBotConfig(template, body.config);
     const bot = await prisma.bot.create({

@@ -4,6 +4,7 @@ import { prisma, Prisma } from '@hive/db';
 import { SWARM_ROLES, ROLE_SUBSCRIPTIONS, type SwarmRole } from '@hive/swarm';
 import { requireAuth, requireRole } from '../auth.js';
 import { writeAuditLog } from '../lib/audit.js';
+import { checkHeadroom, quotaFor } from '../lib/quota.js';
 
 /**
  * Mission CRUD + the approval gate.
@@ -91,6 +92,14 @@ export async function missionRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: { code: 'no_session', message: 'session required' } });
     }
     const body = Create.parse(req.body);
+    // Same ceiling as the composer applies, checked here too: this route is a
+    // second door to the same resource, and a limit enforced on only one of
+    // them is not a limit.
+    const usage = await quotaFor(userId);
+    const noRoom = checkHeadroom(usage, { missions: 1 });
+    if (noRoom) {
+      return reply.code(402).send({ error: { code: noRoom.code, message: noRoom.message } });
+    }
     // Widening the action set is an admin decision wherever it happens. It's
     // gated on PATCH, so leaving it open on create would just be a different
     // door to the same room: a non-admin could create the mission with the

@@ -14,6 +14,7 @@ import {
 import { decide } from './decide.js';
 import { env } from './env.js';
 import { withinBudget } from './budget.js';
+import { effectivePlan } from '@hive/shared';
 
 /**
  * One loop per running mission.
@@ -66,13 +67,28 @@ export async function runMissionLoop(
       decisionPending = true;
     }
 
-    const mission = await prisma.mission.findUnique({ where: { id: missionId } });
+    const mission = await prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        user: {
+          select: { id: true, plan: true, quotaDailySpendCents: true },
+        },
+      },
+    });
     if (!mission || mission.status !== 'running') break;
 
-    const budget = await withinBudget(missionId, mission.limits);
+    const budget = await withinBudget(missionId, mission.limits, {
+      userId: mission.user.id,
+      dailyCapCents: effectivePlan(mission.user).dailySpendCents,
+    });
     if (!budget.ok) {
       log.warn(
-        { missionId, spentCents: Math.round(budget.spentCents), capCents: budget.capCents },
+        {
+          missionId,
+          scope: budget.scope,
+          spentCents: Math.round(budget.spentCents),
+          capCents: budget.capCents,
+        },
         'coordinator: hourly budget reached, skipping',
       );
       lastDecisionAt = Date.now();

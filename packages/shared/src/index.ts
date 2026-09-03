@@ -10,6 +10,8 @@ export {
   workerAvailable,
 } from './constants/worker-status.js';
 export type { WorkerStatus } from './constants/worker-status.js';
+export { PLANS, DEFAULT_PLAN, effectivePlan } from './constants/plans.js';
+export type { Plan } from './constants/plans.js';
 export { JobStatus, JobPayload, JobResult } from './schemas/job.js';
 export { createHealthz, regionLabel, versionLabel } from './health.js';
 export type { HealthCheck, HealthChecks, HealthSnapshot, HealthzResult } from './health.js';

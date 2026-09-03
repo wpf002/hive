@@ -11,6 +11,7 @@ import { coerceConfigToSchema } from '../lib/schema-coerce.js';
 import { writeAuditLog } from '../lib/audit.js';
 import { staggerCron } from '../lib/cron-stagger.js';
 import { measurePoolCapacity, maxBotsForPool, cronMinutes } from '../lib/pool-capacity.js';
+import { checkHeadroom, quotaFor } from '../lib/quota.js';
 
 /**
  * Plain English in, a running swarm out.
@@ -312,13 +313,24 @@ export async function missionComposeRoutes(app: FastifyInstance) {
     // mission takes the smallest of those: every source must cover every
     // subject, or the subjects the slow source cannot reach would be
     // corroborated by fewer feeds than the mission claims.
+    const usage = await quotaFor(userId);
+    const noRoom = checkHeadroom(usage, { missions: 1 });
+    if (noRoom) {
+      return reply.code(402).send({ error: { code: noRoom.code, message: noRoom.message } });
+    }
+
     const capacity = await measurePoolCapacity();
     let limitingPool: { pool: string; subjects: number } | null = null;
     let perSource = env.MISSION_MAX_GATHERERS;
     for (const src of sources) {
       const pool = capacity.get(src.template.poolType);
+      // The account's share of the pool, not the whole pool. Measured
+      // throughput is an installation-wide number, so sizing against all of it
+      // lets the first customer to ask for two hundred subjects take the pool
+      // and leave everyone else's feeds queued behind them — one tenant
+      // breaking the product for the rest by using it as intended.
       const allowed = pool
-        ? maxBotsForPool(pool.jobsPerMinute, cronMinutes(src.cron))
+        ? maxBotsForPool(pool.jobsPerMinute * usage.plan.poolShare, cronMinutes(src.cron))
         : env.MISSION_MAX_GATHERERS;
       if (allowed < perSource) {
         perSource = allowed;
@@ -328,6 +340,24 @@ export async function missionComposeRoutes(app: FastifyInstance) {
     // The absolute backstop, independent of throughput: a mission is also a
     // pile of rows, cron entries and scheduler work.
     perSource = Math.min(perSource, Math.floor(env.MISSION_MAX_GATHERERS / sources.length));
+    // And what is left of this account's bot allowance, spread over its sources.
+    const botHeadroom = Math.max(0, usage.plan.maxBots - usage.bots);
+    const perSourceByQuota = Math.floor(botHeadroom / sources.length);
+    if (perSourceByQuota < perSource) {
+      perSource = perSourceByQuota;
+      limitingPool = null; // the plan is the binding constraint, not a pool
+    }
+    if (perSource < 1) {
+      return reply.code(402).send({
+        error: {
+          code: 'bot_quota',
+          message:
+            `Your ${usage.plan.label} plan allows ${usage.plan.maxBots} bots and you have ` +
+            `${usage.bots}. There is not enough left for a mission across ${sources.length} ` +
+            `sources. Stop a mission you are no longer watching, or move to a larger plan.`,
+        },
+      });
+    }
 
     if (subjects.length > 0 && perSource < 1) {
       return reply.code(422).send({
@@ -464,13 +494,19 @@ export async function missionComposeRoutes(app: FastifyInstance) {
       // Named so a trimmed mission points at the thing to fix — more workers in
       // that pool, or a slower cron — instead of just being quietly narrower
       // than what was asked for.
-      ...(droppedSubjects > 0 && limitingPool
+      ...(droppedSubjects > 0
         ? {
-            limitedBy: {
-              pool: limitingPool.pool,
-              maxSubjects: limitingPool.subjects,
-              reason: `the ${limitingPool.pool} pool sustains ${limitingPool.subjects} subjects at this cron`,
-            },
+            limitedBy: limitingPool
+              ? {
+                  pool: limitingPool.pool,
+                  maxSubjects: limitingPool.subjects,
+                  reason: `your share of the ${limitingPool.pool} pool sustains ${limitingPool.subjects} subjects at this cron`,
+                }
+              : {
+                  plan: usage.plan.label,
+                  maxSubjects: perSource,
+                  reason: `your ${usage.plan.label} plan has ${usage.plan.maxBots - usage.bots} bots left`,
+                },
           }
         : {}),
     });

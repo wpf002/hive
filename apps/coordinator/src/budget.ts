@@ -21,6 +21,27 @@ import { env } from './env.js';
  * back to the service default.
  */
 
+/**
+ * Cost of everything this account's missions have spent over the trailing day,
+ * in microcents.
+ *
+ * The per-mission cap bounds one mission. It says nothing about an account
+ * running twenty of them, which is the shape an actual bill takes — twenty
+ * missions each politely under their own ceiling, adding up to something
+ * nobody agreed to.
+ */
+export async function accountSpentLastDayMicroCents(userId: string): Promise<number> {
+  const since = new Date(Date.now() - 24 * 3_600_000);
+  const rows = await prisma.$queryRaw<{ micro: bigint | null }[]>`
+    SELECT SUM(u."costMicroCents")::bigint AS micro
+      FROM "AiUsage" u
+      JOIN "Mission" m ON u."jobId" = CONCAT('mission:', m.id)
+     WHERE m."userId" = ${userId}
+       AND u."createdAt" >= ${since}
+  `;
+  return Number(rows[0]?.micro ?? 0);
+}
+
 /** Cost of one mission's model calls over the trailing hour, in microcents. */
 export async function spentLastHourMicroCents(missionId: string): Promise<number> {
   const since = new Date(Date.now() - 3_600_000);
@@ -49,9 +70,26 @@ export function budgetCentsPerHour(limits: unknown): number {
 export async function withinBudget(
   missionId: string,
   limits: unknown,
-): Promise<{ ok: true } | { ok: false; spentCents: number; capCents: number }> {
+  owner?: { userId: string; dailyCapCents: number },
+): Promise<
+  { ok: true } | { ok: false; spentCents: number; capCents: number; scope: 'mission' | 'account' }
+> {
   const capCents = budgetCentsPerHour(limits);
   const spent = await spentLastHourMicroCents(missionId);
   const spentCents = spent / 10_000;
-  return spentCents < capCents ? { ok: true } : { ok: false, spentCents, capCents };
+  if (spentCents >= capCents) {
+    return { ok: false, spentCents, capCents, scope: 'mission' };
+  }
+  if (owner && owner.dailyCapCents > 0) {
+    const accountCents = (await accountSpentLastDayMicroCents(owner.userId)) / 10_000;
+    if (accountCents >= owner.dailyCapCents) {
+      return {
+        ok: false,
+        spentCents: accountCents,
+        capCents: owner.dailyCapCents,
+        scope: 'account',
+      };
+    }
+  }
+  return { ok: true };
 }
