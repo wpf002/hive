@@ -7,7 +7,11 @@ services:
       POSTGRES_PASSWORD: hive
       POSTGRES_DB: hive
     ports:
-      - "5434:5432"
+      # Host port is overridable because developers run several projects at
+      # once and ports collide. The default matches .env.example, so a fresh
+      # clone works with no override; a machine with a conflict sets
+      # POSTGRES_HOST_PORT in the root .env instead of editing this file.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: hive-redis
     ports:
-      - "6382:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - ./data/redis:/data
     command: redis-server --appendonly yes

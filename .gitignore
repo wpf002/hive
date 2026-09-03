@@ -54,3 +54,6 @@ data/artifacts/
 deploy/fly/.secrets.env
 deploy/fly/*.secrets.env
 scripts/.localworker.env
+
+# secrets — never commit (symlinks to root .env)
+apps/ui/.env
