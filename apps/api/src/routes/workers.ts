@@ -25,9 +25,22 @@ function drainKey(workerId: string): string {
   return `hive:worker:${workerId}:drain`;
 }
 
-function statusFromMetadata(meta: Record<string, unknown> | undefined): 'online' | 'draining' {
+/**
+ * A worker's status is what it reports, not the fact that it reported.
+ *
+ * 'unhealthy' exists because those two came apart: the browser pool sent
+ * heartbeats for days with no browser installed, so it read as online while
+ * failing every job it claimed — and the mission composer, which picks pools
+ * by this exact signal, kept choosing it. A pool that cannot work must not
+ * count as available.
+ */
+function statusFromMetadata(
+  meta: Record<string, unknown> | undefined,
+): 'online' | 'draining' | 'unhealthy' {
   const v = meta?.status;
-  return v === 'draining' ? 'draining' : 'online';
+  if (v === 'draining') return 'draining';
+  if (v === 'unhealthy') return 'unhealthy';
+  return 'online';
 }
 
 export async function workerRoutes(app: FastifyInstance) {

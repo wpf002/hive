@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '@hive/db';
+import { workerAvailable } from '@hive/shared';
 import { Blackboard, BoardView, clusterByClaim, collapseFindings } from '@hive/swarm';
 import { requireAuth } from '../auth.js';
 import { createBlockingRedis } from '../redis.js';
@@ -248,7 +249,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   // Which pools this mission needs, and which of those are actually running.
   const neededPools = new Set(mission.agents.map((a) => a.bot.template.poolType));
   const live = await prisma.worker.findMany({
-    where: { lastSeenAt: { gt: new Date(now - 30_000) }, status: { not: 'offline' } },
+    where: { lastSeenAt: { gt: new Date(now - 30_000) }, ...workerAvailable },
     select: { poolType: true },
     distinct: ['poolType'],
   });

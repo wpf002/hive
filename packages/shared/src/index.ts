@@ -4,6 +4,12 @@
 // runtime + typecheck in agreement.
 export { WORKER_POOLS, POOL_LABELS } from './constants/pools.js';
 export type { WorkerPool } from './constants/pools.js';
+export {
+  WORKER_STATUSES,
+  WORKER_AVAILABLE_STATUSES,
+  workerAvailable,
+} from './constants/worker-status.js';
+export type { WorkerStatus } from './constants/worker-status.js';
 export { JobStatus, JobPayload, JobResult } from './schemas/job.js';
 export { createHealthz, regionLabel, versionLabel } from './health.js';
 export type { HealthCheck, HealthChecks, HealthSnapshot, HealthzResult } from './health.js';

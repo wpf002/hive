@@ -25,6 +25,10 @@ Handler = Callable[[dict[str, Any], JobLogger], Awaitable[Any]]
 
 
 DLQ_STREAM = "hive:dlq"
+# How often a worker re-checks its own runtime dependencies. Slow on purpose:
+# this is a cheap local check guarding a rare condition, and its whole job is to
+# notice a dependency appearing or disappearing within a minute or so.
+PREFLIGHT_INTERVAL_S = 60.0
 ANY = "any"
 
 
@@ -75,7 +79,11 @@ class HiveWorker(ABC):
         self._redis_block: Optional[redis_async.Redis] = None
         self._heartbeat: Optional[Heartbeat] = None
         self._healthz: Optional[WorkerHealthz] = None
-        self._status: str = "online"  # online | draining
+        self._status: str = "online"  # online | draining | unhealthy
+        # Why this worker cannot work, when it cannot. Reported in the
+        # heartbeat so the failure is visible where pools are chosen, rather
+        # than only in this process's own logs.
+        self._unhealthy_reason: Optional[str] = None
         self._should_exit = False
         self._in_flight_jobs: set[str] = set()
         self._subscriptions: list[tuple[str, str]] = []
@@ -283,6 +291,46 @@ class HiveWorker(ABC):
             if not got:
                 await asyncio.sleep(0.1)
 
+    async def preflight(self) -> Optional[str]:
+        """Check this pool's runtime dependencies.
+
+        Return None when the worker can actually do its work, or a short
+        human-readable reason it cannot — one an operator can act on, naming
+        the missing thing and ideally the command that installs it.
+
+        The default is None: a pool whose only dependency is Python and the
+        network has nothing to check, and inventing a check for it would just
+        be a second thing to keep in sync. Override in pools with a real
+        external dependency — a browser binary, an exchange SDK, a toolchain.
+        """
+        return None
+
+    async def _run_preflight(self) -> None:
+        try:
+            reason = await self.preflight()
+        except Exception as e:  # a broken check must not take the worker down
+            reason = f"preflight check itself failed: {e}"
+        if reason:
+            if self._status != "unhealthy":
+                log.error("worker_unhealthy", pool=self.pool_type, reason=reason)
+            self._status = "unhealthy"
+            self._unhealthy_reason = reason
+        else:
+            if self._status == "unhealthy":
+                log.info("worker_recovered", pool=self.pool_type)
+                self._status = "online"
+            self._unhealthy_reason = None
+
+    async def _preflight_loop(self) -> None:
+        while True:
+            await asyncio.sleep(PREFLIGHT_INTERVAL_S)
+            # Draining is a deliberate operator state and outranks health:
+            # re-marking a draining worker online would pull work back onto a
+            # machine somebody is trying to empty.
+            if self._status == "draining":
+                continue
+            await self._run_preflight()
+
     async def run(self) -> None:
         configure_logging(
             level=self.settings.LOG_LEVEL,
@@ -292,6 +340,21 @@ class HiveWorker(ABC):
         await self.setup()
         if not self._handlers:
             raise RuntimeError(f"{self.__class__.__name__}.setup() did not register any handlers")
+
+        # Runtime dependencies, checked before claiming to be online.
+        #
+        # A worker registering as online means "work sent here will be done".
+        # Registering on process start alone means "a process started", and the
+        # two came apart badly: the browser pool reported online for days with
+        # no Playwright browser installed, so every job it claimed failed, and
+        # the mission composer — which picks pools by exactly this signal —
+        # kept choosing it. An empty field with no explanation is the worst
+        # failure this system has, because it looks like it is working.
+        #
+        # Failing preflight does not exit. The worker stays up, reports
+        # unhealthy with the reason, and keeps re-checking, so installing the
+        # missing dependency is enough to bring it back without a restart.
+        await self._run_preflight()
 
         self._redis_main = redis_async.from_url(
             self.settings.REDIS_URL,
@@ -334,9 +397,18 @@ class HiveWorker(ABC):
             zone=self.zone,
             get_active_jobs=lambda: self._active_jobs,
             get_status=lambda: self._status,
+            # Callable rather than a value: the reason changes while the worker
+            # runs, and a snapshot taken here would report the state at boot
+            # forever.
+            get_unhealthy_reason=lambda: self._unhealthy_reason,
             extra_metadata={"singleton": True} if self.singleton else None,
         )
         self._heartbeat.start()
+
+        # Re-check periodically: a dependency can be installed while the worker
+        # is up (which is how the browser pool was actually fixed), and one can
+        # equally disappear underneath a long-running process.
+        self._preflight_task = asyncio.create_task(self._preflight_loop())
 
         # Phase 6c.2: optional /healthz HTTP endpoint (opt-in via env).
         healthz_port = int(self.settings.HIVE_WORKER_HEALTHZ_PORT or 0)

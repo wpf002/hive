@@ -3,6 +3,7 @@ import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
 import cronParser from 'cron-parser';
 import { prisma, Prisma } from '@hive/db';
+import { workerAvailable } from '@hive/shared';
 import { requireRole } from '../auth.js';
 import { env } from '../env.js';
 import { encryptBotConfig } from '../lib/secrets.js';
@@ -142,7 +143,7 @@ export async function missionComposeRoutes(app: FastifyInstance) {
     // because it looks like it is working.
     const ONLINE_WINDOW_MS = 30_000;
     const liveWorkers = await prisma.worker.findMany({
-      where: { lastSeenAt: { gt: new Date(Date.now() - ONLINE_WINDOW_MS) }, status: { not: 'offline' } },
+      where: { lastSeenAt: { gt: new Date(Date.now() - ONLINE_WINDOW_MS) }, ...workerAvailable },
       select: { poolType: true },
       distinct: ['poolType'],
     });

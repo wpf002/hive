@@ -3,7 +3,7 @@ import { Redis } from 'ioredis';
 import type { LoggerOptions } from 'pino';
 import { prisma } from '@hive/db';
 import { dispatchStreamFor, POOL_STREAM_ANY } from '@hive/worker-base-ts';
-import { createHealthz, type HealthChecks } from '@hive/shared';
+import { createHealthz, workerAvailable, type HealthChecks } from '@hive/shared';
 import { env } from './env.js';
 
 const KNOWN_POOLS = new Set([
@@ -198,7 +198,9 @@ async function unroutableSweep(): Promise<void> {
         const workers = await prisma.worker.findMany({
           where: {
             poolType: pool,
-            status: { not: 'offline' },
+            // A pool whose workers report unhealthy cannot consume this job,
+            // so it is genuinely unroutable rather than merely waiting.
+            ...workerAvailable,
             lastSeenAt: { gt: onlineCutoff },
             ...(region ? { region } : {}),
             ...(region && zone ? { zone } : {}),

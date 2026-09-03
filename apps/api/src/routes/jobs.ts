@@ -67,6 +67,9 @@ export async function jobRoutes(app: FastifyInstance) {
         where: {
           poolType: bot.template.poolType,
           activeJobs: { gt: 0 },
+          // Deliberately not workerAvailable: this asks "is the singleton slot
+          // occupied", and a worker that has gone unhealthy mid-job is still
+          // holding it.
           status: { not: 'offline' },
           lastSeenAt: { gt: new Date(Date.now() - WORKER_ONLINE_WINDOW_MS) },
         },

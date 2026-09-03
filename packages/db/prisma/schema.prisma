@@ -106,7 +106,11 @@ model Worker {
   // setups leave these at the defaults and everything keeps working.
   region     String   @default("local")
   zone       String   @default("default")
-  status     String // online | offline | draining
+  // online | draining | unhealthy | offline
+  // 'unhealthy' is the worker reporting that its own runtime dependencies are
+  // missing — heartbeating but unable to do the work. See @hive/shared's
+  // workerAvailable for what counts as able to serve.
+  status     String
   capacity   Int      @default(1)
   activeJobs Int      @default(0)
   lastSeenAt DateTime @default(now())

@@ -1,4 +1,5 @@
 import { prisma } from '@hive/db';
+import { workerAvailable } from '@hive/shared';
 
 /**
  * How much scheduled work a worker pool can actually absorb.
@@ -47,7 +48,7 @@ export async function measurePoolCapacity(): Promise<Map<string, PoolCapacity>> 
   const onlineSince = new Date(Date.now() - 30_000);
   const workers = await prisma.worker.groupBy({
     by: ['poolType'],
-    where: { lastSeenAt: { gt: onlineSince }, status: { not: 'offline' } },
+    where: { lastSeenAt: { gt: onlineSince }, ...workerAvailable },
     _sum: { capacity: true },
   });
 

@@ -22,6 +22,7 @@ class Heartbeat:
         auth_token: str,
         get_active_jobs: callable,  # type: ignore[type-arg]
         get_status: Optional[callable] = None,  # type: ignore[type-arg]
+        get_unhealthy_reason: Optional[callable] = None,  # type: ignore[type-arg]
         hostname: Optional[str] = None,
         region: str = "local",
         zone: str = "default",
@@ -35,6 +36,7 @@ class Heartbeat:
         self.auth_token = auth_token
         self.get_active_jobs = get_active_jobs
         self.get_status = get_status
+        self.get_unhealthy_reason = get_unhealthy_reason
         self.hostname = hostname or socket.gethostname()
         self.region = region
         self.zone = zone
@@ -48,6 +50,11 @@ class Heartbeat:
         try:
             status = self.get_status() if self.get_status else "online"
             metadata = {"status": status, "region": self.region, "zone": self.zone, **self.extra_metadata}
+            # Carried with the status so an operator reading the workers table
+            # sees why a pool is down, not just that it is.
+            reason = self.get_unhealthy_reason() if self.get_unhealthy_reason else None
+            if reason:
+                metadata["unhealthyReason"] = reason
             r = await client.post(
                 f"{self.api_base_url}/api/workers/heartbeat",
                 json={
