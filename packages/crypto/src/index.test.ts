@@ -31,7 +31,18 @@ test('encryption is non-deterministic (fresh nonce each call)', () => {
 test('decrypt rejects a tampered ciphertext (AEAD auth tag)', () => {
   const ct = encrypt('do not tamper');
   // Flip a character in the base64 body to corrupt the tag/ciphertext.
+  //
+  // Written carefully because the obvious version is subtly wrong: choosing the
+  // replacement by looking at one index and writing it to a different one means
+  // that whenever the target character already equals the replacement, nothing
+  // is tampered with, decrypt correctly succeeds, and the test fails. That is a
+  // roughly one-in-sixty flake on a security assertion — the worst kind, since
+  // the reflex on a red build is to re-run it until it goes green.
+  //
+  // Pick the replacement from the character actually being replaced, so the
+  // string always changes.
   const body = ct.slice(PREFIX.length);
-  const flipped = (body[5] === 'A' ? 'B' : 'A') + body.slice(1);
+  const flipped = (body[0] === 'A' ? 'B' : 'A') + body.slice(1);
+  assert.notEqual(flipped, body, 'the test must actually tamper with something');
   assert.throws(() => decrypt(PREFIX + flipped));
 });

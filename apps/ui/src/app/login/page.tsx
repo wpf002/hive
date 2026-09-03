@@ -114,6 +114,10 @@ function LoginForm() {
           </Link>
         </div>
       </form>
+      <nav className="mt-4 flex justify-center gap-4 font-mono text-[10px] uppercase tracking-[0.1em] text-hive-subtle">
+        <Link href="/legal/terms" className="hover:text-honey-500">Terms</Link>
+        <Link href="/legal/privacy" className="hover:text-honey-500">Privacy</Link>
+      </nav>
     </div>
   );
 }

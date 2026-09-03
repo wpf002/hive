@@ -202,6 +202,10 @@ model User {
   passwordHash String
   displayName  String
   role         String       @default("user") // admin | user
+  // Null means unverified. A timestamp rather than a boolean because "when"
+  // is the question that actually comes up — supporting someone who cannot
+  // sign in, or answering how long an address has been confirmed.
+  emailVerifiedAt DateTime?
   // Which set of limits applies. Plans are defined in code rather than in a
   // table: they change with pricing decisions, not with data, and a table
   // would mean a migration every time someone renames a tier.
@@ -221,6 +225,7 @@ model User {
   profile      UserProfile?
   missions     Mission[]
   usagePeriods UsagePeriod[]
+  emailTokens  EmailVerificationToken[]
 }
 
 /**
@@ -286,6 +291,32 @@ model Session {
 // Single-use password reset token. We store only the SHA-256 hash of the raw
 // token (same pattern as Session.tokenHash) so a DB leak can't be used to reset
 // passwords. `usedAt` is set when consumed so a token can't be replayed.
+/**
+ * Proof that someone can read the address they signed up with.
+ *
+ * Separate from ResetToken rather than a `kind` column on it: the two have
+ * different lifetimes and different consequences, and a bug that let one be
+ * redeemed as the other would turn "I know this address exists" into "I can
+ * take over this account".
+ */
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Only the hash is stored, like ResetToken — a database leak must not hand
+  // someone a working link.
+  tokenHash String    @unique
+  // The address this token proves. Kept so changing an email invalidates a
+  // token issued for the old one instead of silently verifying the new one.
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model ResetToken {
   id        String    @id @default(cuid())
   userId    String

@@ -20,6 +20,11 @@ import {
   findValidResetToken,
   issueResetToken,
 } from '../lib/reset-tokens.js';
+import {
+  buildVerificationLink,
+  issueVerificationToken,
+  redeemVerificationToken,
+} from '../lib/email-verification.js';
 import { env } from '../env.js';
 
 const RequestPasswordResetBody = z.object({
@@ -58,15 +63,50 @@ const ResetPasswordBody = z.object({
   newPassword: z.string().min(8),
 });
 
-function publicUser(u: { id: string; email: string; displayName: string; role: string; createdAt: Date; lastLoginAt: Date | null }) {
+function publicUser(u: { id: string; email: string; displayName: string; role: string; emailVerifiedAt?: Date | null; createdAt: Date; lastLoginAt: Date | null }) {
   return {
     id: u.id,
     email: u.email,
     displayName: u.displayName,
     role: u.role,
+    emailVerified: u.emailVerifiedAt !== null && u.emailVerifiedAt !== undefined,
     createdAt: u.createdAt,
     lastLoginAt: u.lastLoginAt,
   };
+}
+
+/**
+ * Send someone a link proving they can read the address they signed up with.
+ *
+ * Verification matters for two reasons here and neither is ceremony: alerts
+ * about a runaway bill go to this address, and an unverified address is how
+ * one person signs up a hundred times.
+ */
+async function sendVerificationEmail(userId: string, email: string, displayName: string) {
+  const { token } = await issueVerificationToken(userId, email);
+  const link = buildVerificationLink(env.HIVE_PUBLIC_APP_URL, token);
+  await emailProvider().send({
+    to: email,
+    subject: 'Confirm your Hive email address',
+    text: [
+      `Hi ${displayName},`,
+      '',
+      'Confirm this address so Hive can reach you — spend warnings and alerts',
+      'about your swarm are sent here. The link is good for 24 hours:',
+      '',
+      link,
+      '',
+      "If you didn't create a Hive account, you can ignore this email.",
+    ].join('\n'),
+    html: [
+      `<p>Hi ${displayName},</p>`,
+      '<p>Confirm this address so Hive can reach you — spend warnings and alerts',
+      'about your swarm are sent here. The link is good for 24 hours:</p>',
+      `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#f59e0b;color:#111;border-radius:6px;text-decoration:none;font-weight:600">Confirm email</a></p>`,
+      `<p style="color:#666;font-size:13px">Or paste this link into your browser:<br><a href="${link}">${link}</a></p>`,
+      "<p style=\"color:#666;font-size:13px\">If you didn't create a Hive account, you can ignore this email.</p>",
+    ].join(''),
+  });
 }
 
 export async function authRoutes(app: FastifyInstance) {
@@ -85,6 +125,13 @@ export async function authRoutes(app: FastifyInstance) {
       data: { email: body.email, displayName: body.displayName, passwordHash, role: 'user' },
     });
     await writeAuditLog(req, { userId: user.id, action: 'auth.register' });
+    // Best-effort: a mail failure must not fail the signup. The account exists,
+    // the address is simply unverified, and the resend endpoint is the way out.
+    try {
+      await sendVerificationEmail(user.id, user.email, user.displayName);
+    } catch (err) {
+      req.log.error({ err, userId: user.id }, 'verification_email_failed');
+    }
     return reply.code(201).send(publicUser(user));
   });
 
@@ -144,6 +191,59 @@ export async function authRoutes(app: FastifyInstance) {
     reply.setCookie(SESSION_COOKIE, token, cookieOptionsForSession());
     return reply.send({ user: publicUser({ ...user, lastLoginAt: new Date() }), expiresAt });
   });
+
+  /**
+   * Redeem a verification link.
+   *
+   * Public and unauthenticated on purpose: people click these from a mail
+   * client that has no session, and forcing a sign-in first is how a
+   * verification flow gets abandoned.
+   */
+  app.post(
+    '/api/auth/verify-email',
+    { preHandler: rateLimit({ name: 'verify-email', max: 20, windowSec: 3600 }) },
+    async (req, reply) => {
+      const body = z.object({ token: z.string().min(1) }).parse(req.body);
+      const result = await redeemVerificationToken(body.token);
+      if (!result.ok) {
+        const message =
+          result.reason === 'expired'
+            ? 'That link has expired. Sign in and ask for a new one.'
+            : result.reason === 'stale'
+              ? 'That link was for a different email address. Ask for a new one.'
+              : 'That link is not valid. It may already have been used.';
+        return reply.code(400).send({ error: { code: `verification_${result.reason}`, message } });
+      }
+      await writeAuditLog(req, { userId: null, action: 'auth.email_verified' });
+      return reply.send({ ok: true, email: result.email });
+    },
+  );
+
+  /** Send another link. Rate limited hard — this endpoint sends mail. */
+  app.post(
+    '/api/auth/resend-verification',
+    {
+      preHandler: [
+        requireAuth('api'),
+        rateLimit({ name: 'verify-resend', max: 5, windowSec: 3600 }),
+      ],
+    },
+    async (req, reply) => {
+      const me = req.user;
+      if (!me) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'forbidden', message: 'requires a real session' } });
+      }
+      const user = await prisma.user.findUnique({ where: { id: me.id } });
+      if (!user) return reply.code(404).send({ error: { code: 'not_found', message: 'no account' } });
+      // Already done is a success, not an error — the caller wanted a verified
+      // address and has one.
+      if (user.emailVerifiedAt) return reply.send({ ok: true, alreadyVerified: true });
+      await sendVerificationEmail(user.id, user.email, user.displayName);
+      return reply.send({ ok: true });
+    },
+  );
 
   app.post('/api/auth/logout', async (req, reply) => {
     const cookies = (req as typeof req & { cookies?: Record<string, string | undefined> }).cookies;

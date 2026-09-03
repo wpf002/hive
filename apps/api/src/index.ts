@@ -23,6 +23,7 @@ import { missionRoutes } from './routes/missions.js';
 import { missionStreamRoutes } from './routes/mission-stream.js';
 import { missionComposeRoutes } from './routes/mission-compose.js';
 import { usageRoutes } from './routes/usage.js';
+import { accountRoutes } from './routes/account.js';
 import { initStorage } from './lib/artifacts.js';
 import { isOriginAllowed } from './lib/cors.js';
 import { initObservability } from '@hive/observability';
@@ -73,6 +74,7 @@ app.register(missionRoutes);
 app.register(missionStreamRoutes);
 app.register(missionComposeRoutes);
 app.register(usageRoutes);
+app.register(accountRoutes);
 
 try {
   // Honor the platform-injected $PORT (Railway, Heroku, etc.); fall back to the

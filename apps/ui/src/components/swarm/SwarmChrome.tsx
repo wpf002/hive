@@ -81,6 +81,9 @@ export function SwarmChrome({ isAdmin, children }: { isAdmin: boolean; children:
             <Link href="/account/alerts" role="menuitem" className={item} onClick={() => setOpen(false)}>
               Alerts
             </Link>
+            <Link href="/account/data" role="menuitem" className={item} onClick={() => setOpen(false)}>
+              Your data
+            </Link>
             {isAdmin && (
               <Link href="/dashboard" role="menuitem" className={item} onClick={() => setOpen(false)}>
                 Operator console
