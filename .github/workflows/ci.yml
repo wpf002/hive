@@ -1,0 +1,124 @@
+name: CI
+
+# Every push and every pull request. The pre-push hook already runs `pnpm
+# verify` locally, but a hook is advisory — it can be skipped with --no-verify,
+# it does not run for anyone else, and it cannot provide the Postgres and Redis
+# the integration tests need. This is the gate that actually holds.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A newer push to the same branch makes the older run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Prisma reads this at generate time even when nothing connects.
+  DATABASE_URL: postgresql://hive:hive@localhost:5432/hive
+
+jobs:
+  verify:
+    name: typecheck · lint · unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The generated client is a build input for typecheck — without it every
+      # package that imports @hive/db fails to resolve its types.
+      - run: pnpm --filter @hive/db generate
+
+      - run: pnpm -r typecheck
+      - run: pnpm -r lint
+      - run: pnpm -r test
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hive
+          POSTGRES_PASSWORD: hive
+          POSTGRES_DB: hive
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://hive:hive@localhost:5432/hive
+      REDIS_URL: redis://localhost:6379
+      # The integration tests build a real Fastify app, so they need the same
+      # required env the service does. Literals rather than repo secrets on
+      # purpose: these guard a database that is created and destroyed inside
+      # this job, so a secret would add a setup step and a rotation obligation
+      # while protecting nothing. Never reuse these values anywhere real.
+      API_AUTH_TOKEN: ci-api-token-not-a-real-credential
+      WORKER_AUTH_TOKEN: ci-worker-token-not-a-real-credential
+      HIVE_SECRETS_KEY: '0000000000000000000000000000000000000000000000000000000000000001'
+      HIVE_PUBLIC_APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hive/db generate
+      - run: pnpm --filter @hive/db migrate:deploy
+
+      # The integration tests skip themselves when Postgres or Redis is
+      # unreachable, which is right locally and a trap here: a CI job that
+      # silently skips every test it was added to run is worse than no job,
+      # because it reports green. Fail loudly on missing infra instead.
+      - name: Preflight — infra must actually be reachable
+        run: |
+          pg_isready -h localhost -p 5432 -U hive
+          redis-cli -h localhost -p 6379 ping
+
+      - name: Integration tests
+        run: |
+          set -o pipefail
+          pnpm -r test:integration 2>&1 | tee /tmp/itest.log
+          # Verified locally: with Postgres and Redis up, all 21 tests run and
+          # none skip. So any skip here means the suite silently decided the
+          # infra was missing, which is the failure this job exists to catch.
+          if grep -qE 'skipped [1-9]' /tmp/itest.log; then
+            echo "::error::integration tests skipped themselves — infra was not reachable from the test process"
+            exit 1
+          fi
+          if grep -qE '(^|[^0-9])pass 0$' /tmp/itest.log; then
+            echo "::error::integration suite passed zero tests"
+            exit 1
+          fi
