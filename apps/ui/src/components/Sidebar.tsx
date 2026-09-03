@@ -24,7 +24,13 @@ export function Sidebar() {
           <Menu className="h-4 w-4" />
         </button>
         {!collapsed && (
-          <span className="font-mono text-sm font-bold text-honey-500">HIVE</span>
+          <Link
+            href="/"
+            className="font-mono text-sm font-bold text-honey-500 transition-colors hover:text-honey-400"
+            title="Back to the swarm console"
+          >
+            HIVE <span className="text-[10px] font-normal text-hive-subtle">OPS</span>
+          </Link>
         )}
       </div>
       <nav className="flex-1 space-y-1 p-2">

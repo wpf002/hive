@@ -1,5 +1,10 @@
-import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Wand2, Clock, TrendingUp, Info, Bell, Radar, type LucideIcon } from 'lucide-react';
+import { LayoutGrid, Bot, BookTemplate, ListChecks, Cpu, Wand2, Clock, TrendingUp, Info, Radar, type LucideIcon } from 'lucide-react';
 
+// The OPERATOR console's navigation — not the product's. The product is the
+// swarm console at `/`, which has no navigation at all: you describe what you
+// want watched and watch it happen. Everything here is the machinery under it,
+// reachable only by admins.
+//
 // Lifecycle groups, top → bottom: overview → build things → operate them →
 // watch the fleet → get help. `group` only drives the subtle dividers the
 // Sidebar / MobileNav render at each boundary (and leaves room for section
@@ -28,6 +33,5 @@ export const NAV: NavItem[] = [
   { href: '/trading',     label: 'Trading',    icon: TrendingUp,   group: 'fleet' },
   { href: '/workers',     label: 'Workers',    icon: Cpu,          group: 'fleet' },
 
-  { href: '/account/alerts', label: 'Alerts',  icon: Bell,         group: 'help' },
   { href: '/info',           label: 'Info',    icon: Info,         group: 'help' },
 ];
