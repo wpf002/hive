@@ -220,6 +220,51 @@ model User {
   alerts       Alert[]
   profile      UserProfile?
   missions     Mission[]
+  usagePeriods UsagePeriod[]
+}
+
+/**
+ * One billing period per account, frozen when it closes.
+ *
+ * The totals are copied in rather than computed from AiUsage on demand,
+ * because an invoice has to say the same thing next year as it does today.
+ * Usage rows are operational data — they get pruned, backfilled and corrected;
+ * a bill that silently changes when they do is not a bill. So the period is
+ * recomputed freely while it is open, and never again once it is closed.
+ */
+model UsagePeriod {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Half-open [periodStart, periodEnd), always UTC month boundaries.
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // The plan in force when the period closed, kept because plan definitions
+  // change and a past invoice must still be readable against the terms it was
+  // billed under.
+  plan       String
+  planLabel  String
+
+  // Microcents, like AiUsage — a month of sub-cent calls rounded per call is
+  // how the spend figures were wrong before.
+  modelCostMicroCents BigInt @default(0)
+  modelCalls          Int    @default(0)
+  inputTokens         BigInt @default(0)
+  outputTokens        BigInt @default(0)
+  // Bots run, as the other thing worth charging for.
+  jobsRun             Int    @default(0)
+
+  // open -> closed -> invoiced -> paid. Only `open` is ever recomputed.
+  status   String    @default("open")
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, periodStart])
+  @@index([status, periodEnd])
 }
 
 model Session {

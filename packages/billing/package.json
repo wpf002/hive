@@ -1,0 +1,19 @@
+{
+  "name": "@hive/billing",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@hive/db": "workspace:*",
+    "@hive/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

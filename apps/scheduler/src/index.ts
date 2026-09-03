@@ -7,6 +7,7 @@ import { createEmailProvider } from '@hive/email';
 import { env } from './env.js';
 import { captureError, initObservability } from '@hive/observability';
 import { spendWatchTick } from './spend-watch.js';
+import { closeEndedPeriods } from '@hive/billing';
 
 const TICK_MS = 30_000;
 const RELOAD_MS = 60_000;
@@ -341,6 +342,22 @@ try {
   setInterval(() => void loadSchedules().catch((err) => app.log.error({ err }, 'reload_failed')), RELOAD_MS);
   setInterval(() => void digestTick().catch((err) => app.log.error({ err }, 'digest_loop_failed')), TICK_MS);
   setInterval(() => void alertTick().catch((err) => app.log.error({ err }, 'alert_loop_failed')), TICK_MS);
+  // Freeze billing periods that have ended. Hourly rather than at the month
+  // boundary: a job that must fire at midnight on the first is a job that
+  // silently skips a month whenever the process happens to be restarting.
+  setInterval(
+    () =>
+      void closeEndedPeriods()
+        .then((n) => {
+          if (n > 0) app.log.info({ closed: n }, 'usage_periods_closed');
+        })
+        .catch((err) => {
+          app.log.error({ err }, 'usage_period_close_failed');
+          captureError(err, { where: 'usage-period-close' });
+        }),
+    60 * 60_000,
+  );
+
   // Spend moves slowly compared to jobs, and the check is a single aggregate
   // query, so once every ten minutes is plenty.
   setInterval(

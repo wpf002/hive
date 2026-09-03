@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hive/billing": "workspace:*",
     "@hive/db": "workspace:*",
     "@hive/email": "workspace:*",
     "@hive/observability": "workspace:*",
