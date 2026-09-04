@@ -91,7 +91,11 @@ export async function runGathererBridge(
             payload: item.payload,
             provenance: {
               sourceId: agent.sourceId,
-              subject: agent.subject,
+              // The payload's own entity wins over the bot's. A gatherer aimed
+              // at one thing carries its subject in config; a gatherer pulling
+              // a whole board finds the entity per item, and that is the more
+              // specific answer.
+              subject: item.subject ?? agent.subject,
               sourceKind: job.bot.template.name,
               observedAt: isoUtc(item.observedAt, new Date(norm.fetchedAt)),
               fetchedAt: norm.fetchedAt,
@@ -112,7 +116,7 @@ export async function runGathererBridge(
                 kind: finding.kind,
                 payload: finding.payload as Prisma.InputJsonValue,
                 sourceId: agent.sourceId,
-                subject: agent.subject,
+                subject: item.subject ?? agent.subject,
                 sourceKind: finding.provenance.sourceKind,
                 observedAt: new Date(finding.provenance.observedAt),
                 fetchedAt: new Date(finding.provenance.fetchedAt),

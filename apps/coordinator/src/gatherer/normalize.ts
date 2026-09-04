@@ -24,6 +24,45 @@ export interface NormalizedItem {
   payload: Record<string, unknown>;
   /** When the source produced it, if the payload says. */
   observedAt?: string;
+  /**
+   * The entity this item is about, read from the payload.
+   *
+   * Subjects were originally per-bot: point one gatherer at one thing. That
+   * only works for templates whose config names a single entity, and the most
+   * useful sources do the opposite — one poll returns a whole league board, a
+   * whole status page, a whole feed. Splitting those across bots would mean N
+   * bots each fetching the same document and discarding all but their slice,
+   * which is the worst possible trade: N times the requests for the same
+   * evidence.
+   *
+   * So the normalizer names the entity instead. One poll, many findings, each
+   * tagged with what it is about, and per-subject analysis works exactly as it
+   * does for a fanned-out mission — at a fraction of the requests.
+   */
+  subject?: string;
+}
+
+/**
+ * The name two sources would both use for one game.
+ *
+ * Built from the teams rather than taken from an id, because ids are per-source
+ * — DraftKings and FanDuel hash the same fixture differently, and matching on
+ * that would put every book in its own subject and corroborate nothing. The
+ * matchup is the only identifier they share.
+ *
+ * Normalised to lower case with collapsed whitespace so "Miami Heat @ Boston
+ * Celtics" and "miami heat  @  boston celtics" are one subject; returns
+ * undefined when the shape is unrecognised, which leaves the finding
+ * subject-less rather than inventing a grouping.
+ */
+function matchupOf(o: unknown): string | undefined {
+  const g = o as Record<string, unknown> | null;
+  const away = typeof g?.away === 'string' ? g.away : null;
+  const home = typeof g?.home === 'string' ? g.home : null;
+  const raw = away && home ? `${away} @ ${home}` : typeof g?.name === 'string' ? g.name : null;
+  if (!raw) return undefined;
+  const key = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  return key || undefined;
 }
 
 export interface Normalized {
@@ -68,6 +107,8 @@ export function normalizeResult(
           hashed: stripVolatile(g, []),
           payload: g,
           observedAt: undefined,
+          // The matchup, which is what a different source calls the same game.
+          subject: matchupOf(g),
         })),
       };
     }
@@ -84,6 +125,7 @@ export function normalizeResult(
           hashed: stripVolatile(e, []),
           payload: e,
           observedAt: undefined,
+          subject: matchupOf(e),
         })),
       };
     }

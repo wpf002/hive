@@ -260,6 +260,20 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     }))
     .sort((a, b) => a.sourceId.localeCompare(b.sourceId));
 
+  // Subjects actually observed, not subjects configured.
+  //
+  // A subject can arrive two ways: pinned to a bot whose config names one
+  // entity, or read from the payload when one poll returns a whole board. Only
+  // the first ends up on MissionAgent, so counting those alone reported "0
+  // watching" for a mission tracking thirty games — the wider and more useful
+  // case, and the one where the number matters most.
+  const observedSubjects = await prisma.finding.findMany({
+    where: { missionId, subject: { not: '' } },
+    select: { subject: true },
+    distinct: ['subject'],
+  });
+  for (const row of observedSubjects) allSubjects.add(row.subject);
+
   const fleet = {
     bots: mission.agents.length,
     running: fleetRunning,
