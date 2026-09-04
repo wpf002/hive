@@ -52,6 +52,9 @@ export interface SourceView {
   subjects: number;
   /** Bots on this source currently working. */
   running: number;
+  /** Polls this source completed in the activity window, whether or not they
+   *  produced anything new. A feed confirming nothing changed is still alive. */
+  polls: number;
   /** Worst state across the fleet: stalled beats running beats idle beats disabled. */
   state: string;
   /** Findings this source has contributed, for the forage trails in the UI. */
@@ -99,8 +102,10 @@ export interface MissionSnapshot {
    * run must say so — an empty field with no explanation reads as "working".
    */
   stalled: { pools: string[]; queuedJobs: number };
-  /** Findings per minute over the recent window — the field's overall energy. */
+  /** Findings per minute over the recent window — new evidence arriving. */
   findingsPerMin: number;
+  /** Completed polls per minute — work happening, evidence or not. */
+  jobsPerMin: number;
 }
 
 async function buildSnapshot(missionId: string, view: BoardView): Promise<MissionSnapshot | null> {
@@ -151,7 +156,15 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   // Recent activity per source, from the durable record rather than the board:
   // the board is a rolling window, so counting it would conflate "quiet now"
   // with "trimmed away".
-  const ACTIVITY_WINDOW_MIN = 5;
+  // Fifteen minutes, not five.
+  //
+  // Gatherers run on crons measured in minutes, so evidence arrives in bursts
+  // with quiet gaps between. A five-minute window is shorter than the gap: a
+  // feed polling every three minutes spends most of its life reading as dead,
+  // and the picture strobes between "everything at once" and "nothing at all"
+  // while the swarm is in fact working steadily. The window has to be longer
+  // than the interval it is sampling.
+  const ACTIVITY_WINDOW_MIN = 15;
   const since = new Date(now - ACTIVITY_WINDOW_MIN * 60_000);
   const recentRows = await prisma.finding.groupBy({
     by: ['sourceId'],
@@ -161,13 +174,42 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
   const recentBySource = new Map(recentRows.map((r) => [r.sourceId, r._count._all]));
   const findingsPerMin =
     recentRows.reduce((sum, r) => sum + r._count._all, 0) / ACTIVITY_WINDOW_MIN;
+
+  // Polling counted separately from evidence, because they are different facts
+  // and the field needs both.
+  //
+  // A poll that returns what it returned last time produces no finding —
+  // correctly, dedup refuses to re-post it — but the bot did run, reached its
+  // source, and confirmed nothing changed. Measuring only findings makes a
+  // healthy feed watching a quiet subject indistinguishable from a dead one,
+  // which is exactly the distinction an operator is looking at the screen to
+  // make.
+  const jobRows = await prisma.job.groupBy({
+    by: ['botId'],
+    where: {
+      bot: { missionAgents: { some: { missionId } } },
+      finishedAt: { gte: since },
+      status: { in: ['succeeded', 'failed'] },
+    },
+    _count: { _all: true },
+  });
+  const jobsByBot = new Map(jobRows.map((r) => [r.botId, r._count._all]));
+  const jobsPerMin =
+    jobRows.reduce((sum, r) => sum + r._count._all, 0) / ACTIVITY_WINDOW_MIN;
   // Worst-first, so one broken bot in a fleet of a hundred is still visible.
   // Averaging or majority-voting the state would hide exactly the case an
   // operator needs to see.
   const STATE_RANK = ['stalled', 'running', 'idle', 'disabled'];
   const bySourceAgg = new Map<
     string,
-    { pool: string; bots: number; running: number; subjects: Set<string>; state: string }
+    {
+      pool: string;
+      bots: number;
+      running: number;
+      polls: number;
+      subjects: Set<string>;
+      state: string;
+    }
   >();
   let fleetRunning = 0;
   const allSubjects = new Set<string>();
@@ -192,10 +234,12 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
       pool: a.bot.template.poolType,
       bots: 0,
       running: 0,
+      polls: 0,
       subjects: new Set<string>(),
       state: 'disabled',
     };
     agg.bots += 1;
+    agg.polls += jobsByBot.get(a.botId) ?? 0;
     if (state === 'running') agg.running += 1;
     if (a.subject) agg.subjects.add(a.subject);
     if (STATE_RANK.indexOf(state) < STATE_RANK.indexOf(agg.state)) agg.state = state;
@@ -210,6 +254,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
       subjects: agg.subjects.size,
       running: agg.running,
       state: agg.state,
+      polls: agg.polls,
       contributions: contributionsBySource.get(sourceId) ?? 0,
       recentContributions: recentBySource.get(sourceId) ?? 0,
     }))
@@ -297,6 +342,7 @@ async function buildSnapshot(missionId: string, view: BoardView): Promise<Missio
     },
     lastDecisionAt: mission.lastDecisionAt?.toISOString() ?? null,
     stalled: { pools: stalledPools, queuedJobs },
+    jobsPerMin: Number(jobsPerMin.toFixed(2)),
     findingsPerMin: Number(findingsPerMin.toFixed(2)),
   };
 }

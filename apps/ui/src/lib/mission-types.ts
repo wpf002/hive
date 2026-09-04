@@ -28,6 +28,9 @@ export interface SourceView {
   bots: number;
   subjects: number;
   running: number;
+  /** Polls completed in the activity window, whether or not they produced
+   *  anything new. A feed confirming nothing changed is still alive. */
+  polls: number;
   /** running | idle | stalled | disabled — worst across the fleet. */
   state: string;
   contributions: number;
@@ -78,8 +81,10 @@ export interface MissionSnapshot {
   lastDecisionAt: string | null;
   /** Pools with no live worker, and jobs stuck queued because of it. */
   stalled: { pools: string[]; queuedJobs: number };
-  /** Findings per minute over the recent window. */
+  /** Findings per minute over the recent window — new evidence arriving. */
   findingsPerMin: number;
+  /** Completed polls per minute — work happening, evidence or not. */
+  jobsPerMin: number;
 }
 
 export interface MissionListItem {

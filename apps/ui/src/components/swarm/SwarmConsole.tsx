@@ -286,6 +286,7 @@ function Field({ missionId }: { missionId: string }) {
           claims={snapshot.claims}
           findings={snapshot.findings}
           findingsPerMin={snapshot.findingsPerMin}
+          jobsPerMin={snapshot.jobsPerMin}
           decisionPulse={snapshot.lastDecisionAt ? Date.parse(snapshot.lastDecisionAt) : null}
         />
       </div>

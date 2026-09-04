@@ -124,6 +124,7 @@ export default function MissionTerminalPage({ params }: { params: { id: string }
           claims={snapshot.claims}
           findings={snapshot.findings}
           findingsPerMin={snapshot.findingsPerMin}
+          jobsPerMin={snapshot.jobsPerMin}
           decisionPulse={decisionPulse}
         />
       </div>

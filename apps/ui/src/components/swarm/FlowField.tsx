@@ -82,18 +82,21 @@ export function FlowField({
   claims,
   findings,
   findingsPerMin,
+  jobsPerMin,
   decisionPulse,
 }: {
   sources: SourceView[];
   claims: ClaimView[];
   findings: number;
-  /** Live arrival rate. The field's energy tracks this, not lifetime totals. */
+  /** Live arrival rate of new evidence — the field's main energy term. */
   findingsPerMin: number;
+  /** Completed polls per minute. Keeps a working-but-quiet feed visible. */
+  jobsPerMin: number;
   decisionPulse: number | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dataRef = useRef({ sources, claims, findings, findingsPerMin });
-  dataRef.current = { sources, claims, findings, findingsPerMin };
+  const dataRef = useRef({ sources, claims, findings, findingsPerMin, jobsPerMin });
+  dataRef.current = { sources, claims, findings, findingsPerMin, jobsPerMin };
   const flareRef = useRef(0);
 
   useEffect(() => {
@@ -217,6 +220,7 @@ export function FlowField({
         sources: liveSources,
         claims: liveClaims,
         findingsPerMin: liveRate,
+        jobsPerMin: livePolls,
       } = dataRef.current;
 
       // --- sources -------------------------------------------------------
@@ -242,9 +246,13 @@ export function FlowField({
         // Weight by RECENT contribution, not lifetime. A feed that delivered a
         // thousand findings yesterday and nothing since should look quiet,
         // which is the whole point of watching the picture rather than a table.
-        // Floor of 0.15 so a silent feed still renders a thin thread rather
-        // than vanishing — absent and idle must not look identical.
-        weight: Math.max(0.15, s.recentContributions),
+        //
+        // Polls count too, at a fraction of the weight. A feed that ran and
+        // found nothing new is working, and drawing it the same as one that is
+        // not running at all is the picture lying in the other direction. New
+        // evidence is what makes a strand thick; still being alive is what
+        // stops it disappearing.
+        weight: Math.max(0.15, s.recentContributions + s.polls * 0.6),
         stalled: s.state === 'stalled',
       }));
 
@@ -266,7 +274,16 @@ export function FlowField({
       // The floor is a thin trickle rather than zero, because absent and idle
       // still have to look different: a stopped mission renders nothing, an
       // idle one renders a few strands going nowhere much.
-      const energy = 0.22 + Math.log10(1 + liveRate * 12) * 1.7;
+      // Two signals, because there are two different things happening.
+      //
+      // Evidence arriving is what the swarm is for, so it dominates. Polling is
+      // the swarm working — bots reaching their sources and confirming nothing
+      // changed — and it earns a smaller term of its own so a mission between
+      // bursts looks busy rather than dead. Crons fire in minutes; without this
+      // the field strobes on every poll and flatlines in the gaps, which is
+      // motion that has nothing to do with the swarm's actual state.
+      const energy =
+        0.22 + Math.log10(1 + liveRate * 12) * 1.7 + Math.log10(1 + livePolls * 4) * 0.6;
       const want =
         patches.length === 0
           ? 0
@@ -518,7 +535,15 @@ function drawSourceTag(ctx: CanvasRenderingContext2D, p: Patch): void {
   const accent = p.stalled ? '196,69,58' : '255,193,7';
   const quiet = p.weight <= 1;
   const label = p.sourceId.toUpperCase();
-  const count = p.weight > 999 ? '999+' : String(p.weight);
+  // Rounded, not stringified raw. The weight is now a sum of findings and a
+  // fraction of poll count, so it is rarely a whole number, and String() on a
+  // float renders "1.7999999999999998" on a label two characters wide.
+  const count =
+    p.weight > 999
+      ? '999+'
+      : Number.isInteger(p.weight)
+        ? String(p.weight)
+        : p.weight.toFixed(1);
 
   ctx.font = '600 9px ui-monospace, "JetBrains Mono", monospace';
   ctx.textAlign = 'left';
