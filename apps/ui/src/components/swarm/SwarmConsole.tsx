@@ -168,7 +168,7 @@ function Prompt({
         <p className="mx-auto mt-1.5 max-w-3xl font-mono text-[11px] text-red-400">{error}</p>
       )}
       {busy && (
-        <p className="mx-auto mt-1.5 max-w-3xl font-mono text-[11px] text-hive-subtle">
+        <p className="mx-auto mt-1.5 max-w-3xl font-mono text-[11px] uppercase tracking-[0.08em] text-hive-subtle">
           picking feeds, putting one bot on each…
         </p>
       )}
