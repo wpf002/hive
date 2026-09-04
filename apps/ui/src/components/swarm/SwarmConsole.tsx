@@ -292,32 +292,45 @@ function Field({ missionId }: { missionId: string }) {
 
       {/* The swarm only speaks when it has something corroborated, or something
           it wants permission for. Silence is the normal state. */}
-      <div className="max-h-24 shrink-0 overflow-hidden border-t border-hive-border/60 px-4 py-2.5">
+      <div className="max-h-32 shrink-0 overflow-hidden border-t border-hive-border/60 bg-hive-surface/40 px-4 py-4">
         <div className="mx-auto max-w-3xl">
           {pending.length > 0 ? (
             <Approvals missionId={missionId} proposals={pending} />
           ) : top ? (
-            <p className="line-clamp-2 font-mono text-xs leading-relaxed" title={top.claim}>
-              <span
+            // The verdict on its own line above the claim, rather than run
+            // together with it. This is the sentence the whole screen exists to
+            // produce, and it was set at the same size as the axis labels.
+            <div className="space-y-1.5" title={top.claim}>
+              <div
                 className={cn(
-                  'mr-2',
+                  'font-mono text-[11px] font-semibold uppercase tracking-[0.12em]',
                   top.refuted
-                    ? 'text-red-500'
+                    ? 'text-hive-subtle'
                     : top.independentSources >= 2
                       ? 'text-honey-500'
-                      : 'text-red-500',
+                      : 'text-burnt-500',
                 )}
               >
-                {corroborationLabel(top.independentSources, top.refuted, top.subject)}
-              </span>
-              <span className={cn(top.refuted && 'text-hive-subtle line-through')}>{top.claim}</span>
-            </p>
+                {corroborationLabel(top.independentSources, top.refuted, top.subject).replace(
+                  / —$/,
+                  '',
+                )}
+              </div>
+              <p
+                className={cn(
+                  'line-clamp-2 text-[15px] leading-snug text-hive-text',
+                  top.refuted && 'text-hive-subtle line-through',
+                )}
+              >
+                {top.claim}
+              </p>
+            </div>
           ) : status !== 'running' ? (
-            <p className="font-mono text-xs text-hive-subtle">
+            <p className="font-mono text-sm text-hive-subtle">
               Stopped. No feeds are polling and no model calls are being made.
             </p>
           ) : snapshot.stalled.pools.length > 0 ? (
-            <p className="font-mono text-xs leading-relaxed text-red-400">
+            <p className="font-mono text-sm leading-relaxed text-red-400">
               Nothing is running these feeds. The{' '}
               <b>{snapshot.stalled.pools.join(' and ')}</b> worker
               {snapshot.stalled.pools.length > 1 ? 's are' : ' is'} offline
@@ -329,7 +342,7 @@ function Field({ missionId }: { missionId: string }) {
               </span>
             </p>
           ) : (
-            <p className="font-mono text-xs text-hive-subtle">
+            <p className="font-mono text-sm text-hive-subtle">
               Foraging. Nothing corroborated yet.
             </p>
           )}

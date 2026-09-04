@@ -36,7 +36,22 @@ const MAX_PARTICLES = 9000;
  * stays legible for roughly 35 frames, which is what turns moving points into
  * filaments rather than a field of blinking dots.
  */
-const TRAIL_FADE = 0.028;
+/**
+ * How much of the previous frame survives into this one.
+ *
+ * This has to be high enough to actually converge. Compositing
+ * rgba(7,7,10,alpha) over a pixel moves it toward the background by
+ * alpha * distance, and the canvas stores 8-bit channels — so at 0.028 a pixel
+ * sitting twenty levels above the background moves 0.56 of a level, rounds to
+ * zero, and stays there forever. The result was a permanent scratched grey
+ * haze of every strand that had ever crossed the frame, invisible while the
+ * field was busy and obvious the moment it went quiet.
+ *
+ * 0.12 moves that same pixel by more than a level, so the frame genuinely
+ * clears. Trail length is restored by giving particles longer lives instead,
+ * which is the honest way to draw a trail: more of the path, not more residue.
+ */
+const TRAIL_FADE = 0.12;
 
 interface Particle {
   x: number;
@@ -201,7 +216,6 @@ export function FlowField({
       const {
         sources: liveSources,
         claims: liveClaims,
-        findings: liveFindings,
         findingsPerMin: liveRate,
       } = dataRef.current;
 
@@ -211,10 +225,20 @@ export function FlowField({
       // evidence comes from, and drawing two hundred origins would say the
       // opposite of what the independence count means.
       const ordered = [...liveSources].sort((a, b) => a.sourceId.localeCompare(b.sourceId));
+      // Origins in one aligned column, evenly spaced down the middle band of
+      // the field.
+      //
+      // They used to be staggered horizontally by index, which read as
+      // arbitrary — two labels at different depths in an empty margin look
+      // dropped there rather than placed. A single column reads as what it is:
+      // the list of places evidence comes from, in order, with the flow running
+      // left to right from it. The vertical inset keeps the outermost labels
+      // clear of the header and the verdict strip.
+      const spread = ordered.length === 1 ? 0 : 1;
       const patches: Patch[] = ordered.map((s, i) => ({
         sourceId: s.sourceId,
-        x: w * 0.06 + (i % 2) * w * 0.03,
-        y: ((i + 1) / (ordered.length + 1)) * h,
+        x: w * 0.08,
+        y: h * (0.5 + spread * ((i + 0.5) / ordered.length - 0.5) * 0.62),
         // Weight by RECENT contribution, not lifetime. A feed that delivered a
         // thousand findings yesterday and nothing since should look quiet,
         // which is the whole point of watching the picture rather than a table.
@@ -231,9 +255,18 @@ export function FlowField({
 
       // --- particle population scales with real throughput ---------------
       const totalWeight = patches.reduce((s, p) => s + p.weight, 0) || 1;
-      // Energy = live arrival rate, with lifetime findings only as a floor so a
-      // mission that has done real work never renders as empty black.
-      const energy = 1 + Math.log10(1 + liveRate * 12) * 1.6 + Math.log10(1 + liveFindings) * 0.5;
+      // Energy is live arrival rate and nothing else.
+      //
+      // It used to add a term for lifetime findings, so a mission that had ever
+      // done work rendered as busy forever — a full, streaming field while
+      // nothing at all was arriving. That is the picture lying: the whole
+      // reason to watch it rather than a table is that it shows what is
+      // happening now. A quiet feed should look quiet.
+      //
+      // The floor is a thin trickle rather than zero, because absent and idle
+      // still have to look different: a stopped mission renders nothing, an
+      // idle one renders a few strands going nowhere much.
+      const energy = 0.22 + Math.log10(1 + liveRate * 12) * 1.7;
       const want =
         patches.length === 0
           ? 0
@@ -308,7 +341,11 @@ export function FlowField({
         // source and empty space in the middle.
         // Long enough to traverse and braid; short enough that the field keeps
         // turning over as new evidence changes the population.
-        p.life += 0.0011 + p.speed * 0.0004;
+        // Slower ageing than before, to buy back the trail length the stronger
+        // fade costs. A longer-lived particle draws more of its own path, which
+        // is a trail; a weak fade just fails to erase everyone else's, which is
+        // a smear.
+        p.life += 0.0007 + p.speed * 0.00026;
 
         // Wrap on both axes rather than killing at an edge. A hard edge kill
         // empties whole bands of the field within seconds — vertically in a
@@ -392,8 +429,21 @@ export function FlowField({
 }
 
 /**
- * Claim cells, laid out in a hex spiral from the centre out. Fill tracks
- * independent source count — a comb of pale cells is a swarm echoing one feed.
+ * Claim cells, laid out in a hex spiral from the centre out.
+ *
+ * Two rules, both about the comb telling the truth about the swarm's state.
+ *
+ * Refuted claims are not drawn at all. They used to get a red cell with a
+ * cross, which put the loudest colour on the screen on the one thing that had
+ * already been decided and thrown away — and it held a slot in the spiral that
+ * a live claim should have. A refuted claim is not a weaker claim; it is not a
+ * claim.
+ *
+ * Strongest first, and only what is corroborated is filled. Fill tracks
+ * independent source count, so a comb of pale outlines is a swarm echoing one
+ * feed and a comb of solid cells is one genuinely agreeing across sources —
+ * which is the single thing this picture exists to make visible from across a
+ * room.
  */
 function drawComb(
   ctx: CanvasRenderingContext2D,
@@ -415,31 +465,35 @@ function drawComb(
     ctx.stroke();
   }
 
-  claims.slice(0, 37).forEach((claim, i) => {
+  const live = claims
+    .filter((c) => !c.refuted)
+    // Best-supported at the centre, so the eye lands on the strongest thing the
+    // swarm currently believes rather than on whichever claim arrived first.
+    .sort((a, b) => b.independentSources - a.independentSources)
+    .slice(0, 37);
+
+  live.forEach((claim, i) => {
     const { q, r: rr } = spiralHex(i);
     const x = cx + r * 1.75 * (q + rr / 2);
     const y = cy + r * 1.52 * rr;
+    const corroborated = claim.independentSources >= 2;
     const fill = Math.min(1, claim.independentSources / 4);
 
     hexPath(ctx, x, y, r);
-    if (claim.refuted) {
-      ctx.fillStyle = 'rgba(196,69,58,0.20)';
-      ctx.strokeStyle = 'rgba(196,69,58,0.9)';
-    } else {
-      ctx.fillStyle = `rgba(255,193,7,${0.08 + fill * 0.5})`;
-      ctx.strokeStyle = claim.independentSources >= 2 ? 'rgba(255,193,7,0.95)' : 'rgba(120,53,15,0.9)';
-    }
+    // Corroborated cells are filled comb; single-source ones are outlines
+    // waiting to be filled. The difference has to read at a glance and without
+    // relying on hue, which is why it is fill and not colour.
+    ctx.fillStyle = corroborated
+      ? `rgba(255,193,7,${0.30 + fill * 0.55})`
+      : 'rgba(255,193,7,0.05)';
+    ctx.strokeStyle = corroborated ? 'rgba(255,193,7,0.95)' : 'rgba(255,193,7,0.28)';
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = claim.refuted
-      ? 'rgba(196,69,58,1)'
-      : claim.independentSources >= 2
-        ? '#0A0A0A'
-        : 'rgba(161,161,170,0.9)';
+    ctx.fillStyle = corroborated ? '#0A0A0A' : 'rgba(255,193,7,0.55)';
     ctx.font = `${Math.max(9, Math.round(r * 0.5))}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText(claim.refuted ? '×' : String(claim.independentSources), x, y + r * 0.18);
+    ctx.fillText(String(claim.independentSources), x, y + r * 0.18);
   });
   ctx.textAlign = 'left';
 

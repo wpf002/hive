@@ -182,6 +182,9 @@ export async function runAnalystLoop(
           objective: mission.objective,
           subject: group.subject,
           findings: recent,
+          // Everything already on the board for this subject, so the analyst
+          // adds rather than repeats.
+          existingClaims: claimsForSubject(view.state.hypotheses, distinct, group.subject),
         });
       } catch (err) {
         log.error({ err, missionId, subject: group.subject }, 'analyst call failed');
@@ -345,6 +348,30 @@ export async function runAdversaryLoop(
       'adversary: objections',
     );
   }
+}
+
+/**
+ * Claims already made about one subject.
+ *
+ * A hypothesis has no subject of its own — it points at the findings that back
+ * it, and those carry the subject. So the mapping goes through the evidence,
+ * which is also what keeps the answer honest: a claim built from another
+ * subject's findings is not about this one.
+ */
+function claimsForSubject(
+  hypotheses: Hypothesis[],
+  findings: Finding[],
+  subject: string,
+): string[] {
+  const ids = new Set(
+    findings.filter((f) => (f.provenance.subject ?? '') === subject).map((f) => f.id),
+  );
+  const claims = hypotheses
+    .filter((h) => h.supportingFindingIds.some((id) => ids.has(id)))
+    .map((h) => h.claim);
+  // Newest last in board order, so the tail is the most recent thinking — which
+  // is what to keep when the list has to be trimmed.
+  return [...new Set(claims)];
 }
 
 /** One subject's evidence, in board order. */

@@ -9,7 +9,7 @@
     "start": "next start -p 3002",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "NODE_OPTIONS=--dns-result-order=ipv4first playwright test"
   },
   "dependencies": {
     "@hive/shared": "workspace:*",

@@ -55,12 +55,14 @@ Rules:
 1. Cite the exact finding ids behind each claim. Independence is scored downstream by counting how many DISTINCT sources those ids came from, so a claim you cannot cite is worthless.
 2. A claim supported by two different sources is worth far more than one supported by two findings from the same source. Prefer claims you can corroborate across sources.
 3. Do not restate a finding as a claim. "ESPN reports LAL 102-98" is a finding; "LAL is closing out a game they trailed" is a claim.
+3a. Write the claim for a person, not a log reader. No status codes, field names, flags or raw payload fragments — "both checks reported HTTP 200, ok=true" is the evidence leaking into the sentence. Say what it means: "both checks reached the site normally". The ids you cite are where the detail lives; the claim is what it amounts to.
 4. Returning an empty list is correct and common. Do not manufacture claims to seem useful.
 5. Be specific enough that an adversary could try to refute you.
 6. The most valuable claim you can make is about the SAME entity seen by more than one source. If two sources describe the same game, market, host or record, compare them and claim the difference or the agreement — that is a genuinely corroborated claim and it is what this system exists to surface. Look for the same identifier or name across sources before concluding there is nothing.
 7. If the objective asks about something the evidence cannot show — a trend when you have a single snapshot, sentiment when you only have prices — say so as a claim about the evidence itself rather than returning nothing, so the operator learns the feed is wrong for the question.
 8. When a "subject" is given, every finding you are shown is about that one entity and nothing else. Your job for this call is to say what the sources collectively establish about THAT entity. Do not hedge toward the general case, and do not claim anything about entities you were not shown — other subjects are analysed in their own calls.
-9. "sourcesInThisBatch" lists every source that has reported on this subject. If it holds one entry, no claim you make here can be corroborated: say what the single source shows and let the confidence reflect that it stands alone.`;
+9. "sourcesInThisBatch" lists every source that has reported on this subject. If it holds one entry, no claim you make here can be corroborated: say what the single source shows and let the confidence reflect that it stands alone.
+10. "alreadyClaimed" is what has been established about this subject. Do not restate any of it, even in different words — a rephrasing is not a new claim, it is the same claim costing money twice. Return only what these findings add that is not already there. If they add nothing, return an empty list; that is the correct and common answer for a feed reporting the same thing it reported last time.`;
 
 export async function analyze(input: {
   missionId: string;
@@ -74,6 +76,16 @@ export async function analyze(input: {
    */
   subject?: string;
   findings: Finding[];
+  /**
+   * What has already been claimed about this subject.
+   *
+   * Without it the analyst restates the same observation in slightly different
+   * words on every pass, and because claims cluster on normalised text, near
+   * duplicates never collapse. A mission with two findings accumulated
+   * thirty-nine claims this way — each one a fresh model call, each one saying
+   * what the last one said.
+   */
+  existingClaims?: string[];
 }): Promise<Omit<Hypothesis, 'id' | 'agentId'>[]> {
   if (input.findings.length === 0) return [];
 
@@ -110,6 +122,10 @@ export async function analyze(input: {
               // between a single-source subject and a batch that happened to
               // be sampled narrowly.
               sourcesInThisBatch: [...sources].sort(),
+              // Shown so it can add to the board rather than repeat it.
+              ...(input.existingClaims?.length
+                ? { alreadyClaimed: input.existingClaims.slice(0, 40) }
+                : {}),
               findings: board,
             },
             null,

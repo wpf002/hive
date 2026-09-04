@@ -32,6 +32,19 @@ export async function runGathererBridge(
   // backfill on its first tick and immediately blow its own budget.
   let cursor = new Date();
 
+  // Rehydrate the board from the database if it is empty.
+  //
+  // The board is a Redis stream with a MAXLEN trim, and it is the only thing
+  // the console reads. The database is the durable record. When those two
+  // disagree — Redis restarted, the stream was trimmed or flushed — the
+  // mission is silently unrecoverable: dedup correctly refuses to re-post
+  // findings it has already stored, so nothing new ever arrives to repopulate
+  // it, and the console shows a running mission with no evidence, forever.
+  //
+  // The fix is to treat the database as the source of truth on startup, which
+  // it already is everywhere else.
+  await rehydrate(missionId, board, log);
+
   while (!signal.aborted) {
     await sleep(env.GATHERER_POLL_MS, signal);
     if (signal.aborted) break;
@@ -134,6 +147,56 @@ export async function runGathererBridge(
     } catch (err) {
       log.error({ err, missionId }, 'gatherer bridge failed');
     }
+  }
+}
+
+/**
+ * Repost the mission's stored findings when the board has none.
+ *
+ * Bounded to the most recent window rather than everything: the stream is
+ * trimmed for a reason, and replaying a month of a busy mission would blow
+ * past MAXLEN and evict the very evidence it was restoring. Newest wins,
+ * because that is what the trim would have kept anyway.
+ */
+async function rehydrate(missionId: string, board: Blackboard, log: Logger): Promise<void> {
+  try {
+    const existing = await board.snapshot('-');
+    if (existing.findings.length > 0) return;
+
+    const rows = await prisma.finding.findMany({
+      where: { missionId },
+      orderBy: { createdAt: 'desc' },
+      take: 2_000,
+    });
+    if (rows.length === 0) return;
+
+    // Oldest first on the way back out, so board order matches the order these
+    // were originally observed.
+    for (const r of rows.reverse()) {
+      await board.post({
+        type: 'finding',
+        data: {
+          id: r.id,
+          missionId: r.missionId,
+          agentId: r.agentId,
+          kind: r.kind,
+          payload: r.payload as Record<string, unknown>,
+          provenance: {
+            sourceId: r.sourceId,
+            subject: r.subject,
+            sourceKind: r.sourceKind,
+            observedAt: r.observedAt.toISOString(),
+            fetchedAt: r.fetchedAt.toISOString(),
+            contentHash: r.contentHash,
+            jobId: r.jobId,
+          },
+        },
+      });
+    }
+    log.info({ missionId, restored: rows.length }, 'gatherer: board rehydrated from database');
+  } catch (err) {
+    // A failed rehydrate must not stop the mission gathering new evidence.
+    log.error({ err, missionId }, 'gatherer: rehydrate failed');
   }
 }
 

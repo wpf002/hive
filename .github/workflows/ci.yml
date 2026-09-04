@@ -186,26 +186,11 @@ jobs:
       # that passing on one says little about the other.
       - run: pnpm --filter @hive/ui build
 
-      - name: Start API and UI
-        run: |
-          pnpm --filter @hive/api dev > /tmp/api.log 2>&1 &
-          pnpm --filter @hive/ui start > /tmp/ui.log 2>&1 &
-          # Wait for both rather than sleeping: a fixed sleep is either flaky
-          # or slow, and on a cold runner it is both.
-          for i in $(seq 1 60); do
-            curl -sf http://localhost:4010/healthz >/dev/null \
-              && curl -sf -o /dev/null http://localhost:3002/login && exit 0
-            sleep 2
-          done
-          echo "::error::API or UI did not come up"
-          tail -50 /tmp/api.log /tmp/ui.log
-          exit 1
-
+      # No manual start-and-wait: playwright.config.ts owns the servers through
+      # its webServer block, which also waits for each to answer before any
+      # spec runs. Duplicating that here meant two places to keep in step, and
+      # the hand-rolled version reported a stopped server as a broken page.
       - run: pnpm --filter @hive/ui test:e2e
-
-      - name: Server logs on failure
-        if: failure()
-        run: tail -100 /tmp/api.log /tmp/ui.log
 
       - uses: actions/upload-artifact@v4
         if: failure()
